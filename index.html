@@ -1,0 +1,1911 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Pipeline Comercial — Aseguradora General</title>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700;800;900&family=Open+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+html,body,#root{min-height:100%;background:#EBEBEB;font-family:'Open Sans',sans-serif;}
+::-webkit-scrollbar{width:5px;height:5px;}
+::-webkit-scrollbar-track{background:transparent;}
+::-webkit-scrollbar-thumb{background:#C8102E66;border-radius:99px;}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel" data-presets="react">
+const { useState, useRef, useEffect, useCallback, useMemo } = React;
+
+// ══════════════════════════════════════════════════════
+// SUPABASE CONFIG
+// ══════════════════════════════════════════════════════
+const SUPA_URL = "https://uxfkfcistsgpzesveeve.supabase.co";
+const SUPA_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV4ZmtmY2lzdHNncHplc3ZlZXZlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM0MTE3NjMsImV4cCI6MjA4ODk4Nzc2M30.mfUTjAB2zgU01KCkbbA3b0vEcbJdxCHhHuMq97ZDTHg";
+const supa = supabase.createClient(SUPA_URL, SUPA_KEY);
+
+// Mapa email → usuario local
+const EMAIL_MAP = {
+  "ajaquino@aseguradorageneral.com": {id:1, name:"Alejandro Aquino", title:"Gerente de Canales Alternos",           username:"ajaquino", role:"admin", initials:"AA", photo:null},
+  "jortiz@aseguradorageneral.com":   {id:2, name:"Joseline Ortiz",   title:"Ejecutiva de Negocios Canales Alternos", username:"jortiz",   role:"user",  initials:"JO", photo:null},
+};
+
+// Helpers Supabase → deal local
+function dbToDeal(row) {
+  return {
+    id:          row.id,
+    cliente:     row.cliente,
+    ramo:        row.ramo || "",
+    otroRamo:    row.otro_ramo || "",
+    monto:       row.monto || 0,
+    asegurados:  row.asegurados || 0,
+    stage:       row.stage || "acercamiento",
+    subArea:     row.sub_area || null,
+    status:      row.status || "negociacion",
+    fechaInicio: row.fecha_inicio || "",
+    razonesP:    row.razones_perdida || [],
+    history:     row.history || [],
+    stageCounts: row.stage_counts || {},
+    comments:    row.comments || [],
+    assignedTo:  row.assigned_to || 1,
+    createdBy:   row.created_by || "",
+    createdAt:   row.created_at,
+  };
+}
+function dealToDB(d) {
+  return {
+    id:              d.id,
+    cliente:         d.cliente,
+    ramo:            d.ramo || "",
+    otro_ramo:       d.otroRamo || "",
+    monto:           d.monto || 0,
+    asegurados:      d.asegurados || 0,
+    stage:           d.stage || "acercamiento",
+    sub_area:        d.subArea || null,
+    status:          d.status || "negociacion",
+    fecha_inicio:    d.fechaInicio || null,
+    razones_perdida: d.razonesP || [],
+    history:         d.history || [],
+    stage_counts:    d.stageCounts || {},
+    comments:        d.comments || [],
+    assigned_to:     d.assignedTo || 1,
+    created_by:      d.createdBy || "",
+    updated_at:      new Date().toISOString(),
+  };
+}
+
+// ══════════════════════════════════════════════════════
+// CONSTANTES
+// ══════════════════════════════════════════════════════
+const C = {
+  red:"#C8102E", redDark:"#A00E24", redLight:"#E03347", redBg:"#FEF2F4",
+  black:"#2C2C2C", blackLight:"#3D3D3D",
+  white:"#FFFFFF",
+  bg:"#EBEBEB", bgCard:"#FFFFFF",
+  gray50:"#F7F7F7", gray100:"#EFEFEF", gray200:"#E2E2E2", gray300:"#C8C8C8",
+  gray400:"#A0A0A0", gray500:"#737373", gray600:"#555555", gray700:"#3D3D3D", gray800:"#2C2C2C",
+  border:"#DEDEDE", borderDark:"#C0C0C0",
+  text:"#2C2C2C", textMid:"#555555", textLight:"#A0A0A0",
+  green:"#15803D", greenBg:"#F0FDF4", greenLight:"#22C55E",
+  amber:"#B45309", amberBg:"#FFFBEB",
+  blue:"#1D4ED8", blueBg:"#EFF6FF",
+  cyan:"#0E7490", cyanBg:"#ECFEFF",
+  purple:"#6D28D9", purpleBg:"#F5F3FF",
+  shadow:"0 1px 3px rgba(0,0,0,.07)",
+  shadowMd:"0 4px 14px rgba(0,0,0,.1)",
+  shadowLg:"0 20px 50px rgba(0,0,0,.2)",
+};
+
+// Usuarios (contraseñas se guardan encriptadas en localStorage en producción real)
+const DEFAULT_USERS = [
+  {id:1, name:"Alejandro Aquino", title:"Gerente de Canales Alternos",           username:"ajaquino", password:"Gu@temala2026",  role:"admin",  initials:"AA", photo:null},
+  {id:2, name:"Joseline Ortiz",   title:"Ejecutiva de Negocios Canales Alternos", username:"jortiz",   password:"Guatem@la2026", role:"user",   initials:"JO", photo:null},
+];
+
+// Estatus de oportunidad
+const STATUS_OPTS = [
+  {id:"negociacion", label:"En Negociación", color:C.amber,  bg:C.amberBg,  icon:"◉"},
+  {id:"ganada",      label:"Ganada",          color:C.green,  bg:C.greenBg,  icon:"✓"},
+  {id:"perdida",     label:"Perdida",         color:C.red,    bg:C.redBg,    icon:"✕"},
+];
+
+const RAZONES_PERDIDA = [
+  {id:"precio",       label:"Precio"},
+  {id:"cobertura",    label:"Cobertura"},
+  {id:"comision",     label:"Comisión"},
+  {id:"beneficios",   label:"Beneficios"},
+  {id:"procedimiento",label:"Procedimiento"},
+  {id:"decision_cliente", label:"Decisión del Cliente"},
+  {id:"decision_agsa",    label:"Decisión Técnica AGSA"},
+];
+
+// Etapas del pipeline — sin Cierre (va a sección Cierre/Lanzamiento)
+const STAGES = [
+  {id:"acercamiento", label:"Acercamiento",             color:C.gray700, bg:C.gray100, icon:"○"},
+  {id:"cotizacion",   label:"Diseño / Cotización",       color:C.gray600, bg:C.gray100, icon:"◈"},
+  {id:"seguimiento",  label:"Seguimiento / Negociación", color:C.gray500, bg:C.gray100, icon:"◉"},
+  {id:"otras_areas",  label:"Otras Áreas",               color:C.gray600, bg:C.gray100, icon:"⬡", sub:true},
+];
+
+// Incluye cierre para dashboard y tabla de tiempos
+const STAGES_ALL = [
+  ...STAGES,
+  {id:"cierre", label:"Cierre / Lanzamiento", color:C.green, bg:C.greenBg, icon:"★"},
+];
+
+const SUBAREAS = [
+  {id:"tecnica",      label:"Área Técnica",          icon:"⚙"},
+  {id:"marketing",    label:"Marketing",              icon:"📡"},
+  {id:"ti",           label:"TI",                     icon:"💻"},
+  {id:"reclamos",     label:"Reclamos",               icon:"📋"},
+  {id:"contact",      label:"Contact Center",         icon:"☎"},
+  {id:"financiera",   label:"Financiera / Cobros",    icon:"₲"},
+  {id:"cumplimiento", label:"Cumplimiento",           icon:"✓"},
+  {id:"planeacion",   label:"Planeación Estratégica", icon:"◎"},
+];
+
+const RAMOS = ["Vida","Gastos Médicos","Accidentes Personales","Automóvil","Responsabilidad Civil","Motocicleta","Responsabilidad Civil Motocicleta","Saldos Deudores","Otros"];
+
+// ── Utilidades ──────────────────────────────────────
+const fmtDur = ms => {
+  if(!ms||ms<=0) return "<1m";
+  const m=Math.floor(ms/60000),h=Math.floor(m/60),d=Math.floor(h/24);
+  if(d>0) return `${d}d ${h%24}h`; if(h>0) return `${h}h ${m%60}m`; return `${m}m`;
+};
+const fmtDT  = ts => new Date(ts).toLocaleString("es-GT",{day:"2-digit",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"});
+const fmtD   = ts => new Date(ts).toLocaleDateString("es-GT",{day:"2-digit",month:"short",year:"numeric"});
+const fmtQ   = v  => "Q "+(parseInt(String(v||"0").replace(/\D/g,""))||0).toLocaleString("es-GT");
+const gS     = id => STAGES_ALL.find(s=>s.id===id)||STAGES_ALL[0];
+const gSA    = id => SUBAREAS.find(s=>s.id===id);
+const gST    = id => STATUS_OPTS.find(s=>s.id===id);
+const ini    = n  => (n||"?").split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase();
+const todayISO = () => new Date().toISOString().slice(0,10);
+const monthKey = d => { const dt=new Date(d); return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,"0")}`; };
+const monthLabel = k => { const [y,m]=k.split("-"); const names=["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"]; return `${names[parseInt(m)-1]} ${y}`; };
+
+// ── Demo data ────────────────────────────────────────
+const N = Date.now();
+const DEMO = [
+  {id:1,cliente:"Corporación Financiera SA",monto:"450000",asegurados:"320",ramo:"Gastos Médicos",otroRamo:"",fechaInicio:new Date(N-18*864e5).toISOString().slice(0,10),stage:"seguimiento",subArea:null,assignedTo:1,status:"negociacion",razonesP:[],
+   history:[{stage:"acercamiento",subArea:null,enteredAt:N-18*864e5},{stage:"cotizacion",subArea:null,enteredAt:N-12*864e5},{stage:"seguimiento",subArea:null,enteredAt:N-4*864e5}],stageCounts:{acercamiento:1,cotizacion:1,seguimiento:1},
+   comments:[{id:1,userId:1,text:"Cliente muy interesado. Agenda reunión la próxima semana.",ts:N-3*864e5}]},
+  {id:2,cliente:"Grupo Industrial del Norte",monto:"128000",asegurados:"85",ramo:"Accidentes Personales",otroRamo:"",fechaInicio:new Date(N-9*864e5).toISOString().slice(0,10),stage:"otras_areas",subArea:"ti",assignedTo:2,status:"negociacion",razonesP:[],
+   history:[{stage:"acercamiento",subArea:null,enteredAt:N-9*864e5},{stage:"otras_areas",subArea:"ti",enteredAt:N-864e5}],stageCounts:{acercamiento:1,otras_areas:1},comments:[]},
+  {id:3,cliente:"Distribuidora Centroamericana",monto:"75000",asegurados:"45",ramo:"Vida",otroRamo:"",fechaInicio:new Date(N-5*864e5).toISOString().slice(0,10),stage:"cotizacion",subArea:null,assignedTo:1,status:"negociacion",razonesP:[],
+   history:[{stage:"acercamiento",subArea:null,enteredAt:N-5*864e5},{stage:"cotizacion",subArea:null,enteredAt:N-2*864e5}],stageCounts:{acercamiento:1,cotizacion:1},comments:[]},
+  {id:4,cliente:"Exportadora Los Altos",monto:"220000",asegurados:"150",ramo:"Gastos Médicos",otroRamo:"",fechaInicio:new Date(N-30*864e5).toISOString().slice(0,10),stage:"cierre",subArea:null,assignedTo:2,status:"ganada",razonesP:[],
+   history:[{stage:"acercamiento",subArea:null,enteredAt:N-30*864e5},{stage:"cierre",subArea:null,enteredAt:N-2*864e5}],stageCounts:{acercamiento:1,cierre:1},comments:[]},
+  {id:5,cliente:"Constructora Quetzal",monto:"",asegurados:"",ramo:"",otroRamo:"",fechaInicio:new Date(N-2*864e5).toISOString().slice(0,10),stage:"acercamiento",subArea:null,assignedTo:1,status:"negociacion",razonesP:[],
+   history:[{stage:"acercamiento",subArea:null,enteredAt:N-2*864e5}],stageCounts:{acercamiento:1},comments:[{id:1,userId:1,text:"Primer contacto vía LinkedIn.",ts:N-864e5}]},
+  {id:6,cliente:"Farmacéutica Nacional GT",monto:"310000",asegurados:"200",ramo:"Gastos Médicos",otroRamo:"",fechaInicio:new Date(N-22*864e5).toISOString().slice(0,10),stage:"otras_areas",subArea:"marketing",assignedTo:1,status:"negociacion",razonesP:[],
+   history:[{stage:"acercamiento",subArea:null,enteredAt:N-22*864e5},{stage:"otras_areas",subArea:"marketing",enteredAt:N-3*864e5}],stageCounts:{acercamiento:1,otras_areas:1},comments:[]},
+  {id:7,cliente:"Logística Express SA",monto:"55000",asegurados:"30",ramo:"Responsabilidad Civil",otroRamo:"",fechaInicio:new Date(N-40*864e5).toISOString().slice(0,10),stage:"cotizacion",subArea:null,assignedTo:2,status:"perdida",razonesP:["precio","comision"],
+   history:[{stage:"acercamiento",subArea:null,enteredAt:N-40*864e5},{stage:"cotizacion",subArea:null,enteredAt:N-33*864e5}],stageCounts:{acercamiento:1,cotizacion:1},comments:[]},
+  {id:8,cliente:"Textilera Maya SA",monto:"88000",asegurados:"60",ramo:"Vida",otroRamo:"",fechaInicio:new Date(N-365*864e5).toISOString().slice(0,10),stage:"acercamiento",subArea:null,assignedTo:1,status:"perdida",razonesP:["precio","cobertura","decision_cliente"],
+   history:[{stage:"acercamiento",subArea:null,enteredAt:N-365*864e5}],stageCounts:{acercamiento:1},comments:[]},
+];
+
+// ══════════════════════════════════════════════════════
+// CSS
+// ══════════════════════════════════════════════════════
+const injectCSS = () => {
+  if(document.getElementById("agcrm4")) return;
+  const s = document.createElement("style"); s.id="agcrm4";
+  s.textContent = `
+.app{display:flex;flex-direction:column;min-height:100vh;background:${C.bg};color:${C.text};font-family:'Open Sans',sans-serif;}
+/* LOGIN */
+.lw{min-height:100vh;display:flex;align-items:stretch;}
+.lbrand{width:44%;background:${C.black};display:flex;flex-direction:column;align-items:center;justify-content:center;padding:48px;position:relative;overflow:hidden;}
+.lbrand::after{content:'';position:absolute;bottom:0;left:0;right:0;height:4px;background:${C.red};}
+.lbrand-tagline{font-family:'Montserrat',sans-serif;font-size:11px;font-weight:600;color:rgba(255,255,255,.4);letter-spacing:2.5px;text-transform:uppercase;text-align:center;margin-top:24px;}
+.lbrand-title{font-family:'Montserrat',sans-serif;font-size:20px;font-weight:700;color:rgba(255,255,255,.9);text-align:center;margin-top:8px;line-height:1.4;}
+.lbrand-div{width:36px;height:2px;background:${C.red};margin:20px auto;}
+.lform{flex:1;display:flex;align-items:center;justify-content:center;padding:48px;background:${C.white};}
+.lcard{width:100%;max-width:370px;}
+.lcard-title{font-family:'Montserrat',sans-serif;font-size:24px;font-weight:800;color:${C.black};margin-bottom:5px;}
+.lcard-sub{font-size:13px;color:${C.gray500};margin-bottom:28px;}
+@media(max-width:700px){.lbrand{display:none;}.lform{justify-content:center;}}
+/* TOPBAR */
+.tb{height:56px;background:${C.black};display:flex;align-items:center;justify-content:space-between;padding:0 18px;position:sticky;top:0;z-index:50;border-bottom:3px solid ${C.red};}
+.navb{padding:6px 13px;border-radius:5px;font-size:12px;font-weight:600;cursor:pointer;border:none;background:transparent;color:rgba(255,255,255,.55);transition:all .15s;font-family:'Open Sans',sans-serif;}
+.navb:hover{color:#fff;background:rgba(255,255,255,.08);}
+.navb.on{color:#fff;background:${C.red};}
+.upill{display:flex;align-items:center;gap:8px;padding:4px 10px 4px 4px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);border-radius:99px;cursor:pointer;}
+.upill:hover{background:rgba(255,255,255,.13);}
+.uav{width:28px;height:28px;border-radius:50%;background:${C.red};display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff;flex-shrink:0;overflow:hidden;}
+.uav img{width:100%;height:100%;object-fit:cover;}
+/* SUBBAR */
+.sb{height:40px;background:${C.white};border-bottom:1px solid ${C.border};display:flex;align-items:center;justify-content:space-between;padding:0 16px;gap:10px;}
+/* INPUTS */
+.fi{width:100%;background:${C.white};border:1px solid ${C.border};border-radius:7px;padding:9px 13px;color:${C.text};font-family:'Open Sans',sans-serif;font-size:13px;outline:none;transition:border-color .15s,box-shadow .15s;}
+.fi:focus{border-color:${C.red};box-shadow:0 0 0 3px rgba(200,16,46,.1);}
+.fi::placeholder{color:${C.gray400};} .fi option{background:${C.white};}
+.fl{font-size:11px;font-weight:700;color:${C.gray600};text-transform:uppercase;letter-spacing:.5px;margin-bottom:5px;}
+.fopt{font-size:10px;color:${C.gray400};margin-left:4px;font-weight:400;}
+/* BUTTONS */
+.btn{padding:8px 16px;border-radius:7px;border:none;font-family:'Open Sans',sans-serif;font-weight:600;font-size:12px;cursor:pointer;transition:all .15s;display:inline-flex;align-items:center;gap:5px;}
+.br{background:${C.red};color:#fff;} .br:hover{background:${C.redDark};}
+.bn{background:${C.black};color:#fff;} .bn:hover{background:${C.blackLight};}
+.bg{background:transparent;color:${C.gray600};border:1px solid ${C.border};} .bg:hover{background:${C.gray100};}
+.bd{background:transparent;color:${C.red};border:1px solid rgba(200,16,46,.3);} .bd:hover{background:${C.redBg};}
+.fab{position:fixed;bottom:24px;right:24px;width:52px;height:52px;border-radius:50%;background:${C.red};border:none;color:#fff;font-size:28px;cursor:pointer;box-shadow:0 4px 20px rgba(200,16,46,.45);z-index:40;display:flex;align-items:center;justify-content:center;transition:all .15s;line-height:1;}
+.fab:hover{background:${C.redDark};transform:scale(1.06);}
+/* MODALS */
+.ov{position:fixed;inset:0;background:rgba(0,0,0,.5);backdrop-filter:blur(5px);display:flex;align-items:center;justify-content:center;z-index:100;padding:16px;}
+.mo{background:${C.white};border-radius:13px;padding:26px;width:540px;max-height:90vh;overflow-y:auto;box-shadow:${C.shadowLg};}
+.mosm{width:420px;} .molg{width:660px;}
+.mt{font-size:15px;font-weight:700;color:${C.black};margin-bottom:18px;display:flex;align-items:center;justify-content:space-between;font-family:'Montserrat',sans-serif;}
+.mx{background:transparent;border:none;color:${C.gray400};font-size:18px;cursor:pointer;padding:2px 8px;border-radius:4px;line-height:1;}
+.mx:hover{color:${C.text};}
+.fgrid{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.fsec{font-size:10px;font-weight:700;color:${C.gray400};text-transform:uppercase;letter-spacing:.6px;margin:14px 0 8px;padding-bottom:5px;border-bottom:1px solid ${C.border};}
+/* STATUS SELECTOR */
+.ssel{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:12px;}
+.sso{display:flex;flex-direction:column;align-items:center;gap:4px;padding:10px 6px;border-radius:8px;border:2px solid ${C.border};background:${C.gray50};cursor:pointer;transition:all .15s;}
+.sso:hover{border-color:var(--oc);background:var(--ob);}
+.sso.act{border-color:var(--oc);background:var(--ob);}
+.sso-lbl{font-size:10px;font-weight:700;color:${C.gray500};text-align:center;}
+.sso.act .sso-lbl{color:var(--oc);}
+/* RAZONES */
+.rz-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:12px;}
+.rz-item{display:flex;align-items:center;gap:7px;padding:8px 11px;border-radius:7px;border:1px solid ${C.border};background:${C.gray50};cursor:pointer;transition:all .12s;}
+.rz-item:hover{border-color:${C.red};background:${C.redBg};}
+.rz-item.sel{border-color:${C.red};background:${C.redBg};}
+.rz-cb{width:15px;height:15px;border-radius:3px;border:2px solid ${C.gray300};background:${C.white};display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .12s;}
+.rz-item.sel .rz-cb{background:${C.red};border-color:${C.red};}
+/* STAGE PICK */
+.sopts{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px;}
+.so{display:flex;flex-direction:column;align-items:center;gap:5px;padding:10px 6px;border-radius:8px;border:1px solid ${C.border};background:${C.gray50};cursor:pointer;transition:all .15s;}
+.so:hover{border-color:var(--oc);background:var(--ob);}
+.so.cur{border-color:var(--oc)!important;background:var(--ob);pointer-events:none;}
+.solbl{font-size:10px;font-weight:600;color:${C.gray600};text-align:center;line-height:1.3;}
+.so.cur .solbl{color:var(--oc);}
+/* SUBAREAS */
+.sagrid{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.sabtn{display:flex;align-items:center;gap:9px;padding:9px 12px;border-radius:8px;border:1px solid ${C.border};background:${C.gray50};cursor:pointer;transition:all .15s;width:100%;font-family:'Open Sans',sans-serif;}
+.sabtn:hover,.sabtn.cur{border-color:${C.gray700};background:${C.gray200};}
+.sabtn.cur{border-width:2px;}
+.salbl{font-size:12px;font-weight:600;color:${C.gray600};}
+.sabtn:hover .salbl,.sabtn.cur .salbl{color:${C.gray800};}
+/* PIPELINE */
+.pipe{display:flex;gap:10px;padding:14px;overflow-x:auto;min-height:calc(100vh - 96px);align-items:flex-start;}
+.scol{min-width:228px;width:228px;flex-shrink:0;}
+.scol.dov .scol-body{background:${C.redBg};outline:2px dashed ${C.red};border-radius:10px;}
+.scol-head{padding:7px 4px 9px;}
+.scol-body{border-radius:10px;padding:6px;min-height:80px;}
+.sdot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+.sname{font-size:11px;font-weight:700;color:${C.gray600};}
+.scnt{min-width:20px;height:20px;border-radius:99px;background:${C.gray200};display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:${C.gray600};padding:0 6px;}
+.smonto{font-size:10px;color:${C.gray400};padding-left:14px;margin-top:2px;font-weight:600;}
+/* DEAL CARD */
+.dc{background:${C.white};border:1px solid ${C.border};border-radius:10px;padding:11px;margin-bottom:7px;cursor:grab;user-select:none;transition:border-color .12s,transform .1s,box-shadow .12s;position:relative;overflow:hidden;box-shadow:${C.shadow};}
+.dc::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--sc,${C.gray300});}
+.dc:hover{border-color:var(--sc);transform:translateY(-1px);box-shadow:${C.shadowMd};}
+.dc.drag{opacity:.25;transform:rotate(1.5deg);}
+.dcav{width:28px;height:28px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex-shrink:0;}
+.dcmn{font-size:11px;font-weight:700;color:${C.green};}
+.dcnm{font-size:12px;font-weight:700;color:${C.black};line-height:1.3;margin-bottom:2px;}
+.dcrm{font-size:10px;color:${C.gray400};margin-bottom:4px;}
+.dcsb{display:inline-flex;align-items:center;gap:3px;background:${C.gray100};border:1px solid ${C.gray300};border-radius:4px;padding:2px 6px;font-size:9px;color:${C.gray600};margin-bottom:4px;font-weight:600;}
+.dcft{display:flex;align-items:center;justify-content:space-between;border-top:1px solid ${C.border};padding-top:5px;margin-top:4px;}
+.st-pill{display:inline-flex;align-items:center;gap:4px;padding:2px 7px;border-radius:99px;font-size:9px;font-weight:700;}
+.cmb{display:inline-flex;align-items:center;gap:3px;font-size:9px;color:${C.gray400};background:${C.gray100};border-radius:4px;padding:2px 5px;}
+.empty{text-align:center;padding:22px 0;color:${C.gray400};font-size:10px;border:1px dashed ${C.gray300};border-radius:8px;}
+/* PROSPECCION */
+.pros{padding:14px;overflow-x:auto;min-height:calc(100vh - 96px);}
+.pros-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;}
+.pros-months{display:flex;flex-direction:column;gap:20px;}
+.pros-month{background:${C.white};border:1px solid ${C.border};border-radius:10px;overflow:hidden;box-shadow:${C.shadow};}
+.pros-month-head{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:${C.gray50};border-bottom:1px solid ${C.border};}
+.pros-month-title{font-family:'Montserrat',sans-serif;font-size:13px;font-weight:700;color:${C.black};}
+.pros-month-sub{font-size:11px;color:${C.gray400};}
+.pros-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px;padding:12px;}
+.pros-card{background:${C.white};border:1px solid ${C.border};border-radius:9px;padding:11px;position:relative;overflow:hidden;border-left:3px solid ${C.red};}
+.pros-card-lbl{display:inline-flex;align-items:center;gap:4px;background:${C.redBg};border:1px solid rgba(200,16,46,.2);border-radius:5px;padding:2px 7px;font-size:9px;color:${C.red};font-weight:700;margin-bottom:6px;}
+/* DETAIL MODAL */
+.igrid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px;}
+.ibox{background:${C.gray50};border:1px solid ${C.border};border-radius:8px;padding:8px 11px;}
+.ilbl{font-size:9px;font-weight:700;color:${C.gray400};text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px;}
+.ival{font-size:12px;font-weight:700;color:${C.text};}
+.tli{display:flex;gap:9px;margin-bottom:12px;position:relative;}
+.tlln{position:absolute;left:4px;top:13px;width:1px;height:calc(100%+4px);background:${C.border};}
+.tldt{width:10px;height:10px;border-radius:50%;flex-shrink:0;margin-top:3px;border:2px solid ${C.white};box-shadow:0 0 0 1px var(--tc,#ccc);}
+.area-quick{display:flex;align-items:center;gap:5px;padding:7px 10px;border-radius:8px;background:${C.gray50};border:1px solid ${C.border};margin-bottom:10px;flex-wrap:wrap;}
+.area-chip{padding:3px 8px;border-radius:5px;border:1px solid ${C.border};background:${C.white};font-size:10px;font-weight:600;color:${C.gray600};cursor:pointer;transition:all .12s;}
+.area-chip:hover,.area-chip.cur{background:${C.gray700};border-color:${C.gray700};color:#fff;}
+/* COMMENTS */
+.cm-box{border-top:1px solid ${C.border};padding-top:13px;margin-top:13px;}
+.cm-title{font-size:10px;font-weight:700;color:${C.gray500};text-transform:uppercase;letter-spacing:.6px;margin-bottom:9px;}
+.cm-list{display:flex;flex-direction:column;gap:9px;margin-bottom:11px;max-height:180px;overflow-y:auto;}
+.cm{display:flex;gap:8px;}
+.cm-av{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:#fff;flex-shrink:0;background:${C.black};}
+.cm-body{flex:1;background:${C.gray50};border-radius:0 8px 8px 8px;padding:7px 10px;}
+.cm-meta{font-size:10px;color:${C.gray400};margin-bottom:2px;display:flex;gap:7px;flex-wrap:wrap;}
+.cm-name{font-weight:700;color:${C.gray600};}
+.cm-text{font-size:12px;color:${C.text};line-height:1.5;}
+.cm-input{width:100%;background:${C.white};border:1px solid ${C.border};border-radius:7px;padding:8px 11px;font-size:12px;font-family:'Open Sans',sans-serif;outline:none;resize:none;}
+.cm-input:focus{border-color:${C.red};}
+/* DASHBOARD */
+.dash{padding:18px;display:flex;flex-direction:column;gap:18px;background:${C.bg};min-height:calc(100vh - 96px);}
+.ds-section{display:flex;flex-direction:column;gap:11px;}
+.ds-sec-title{font-size:10px;font-weight:700;color:${C.gray500};text-transform:uppercase;letter-spacing:1px;padding:0 2px;}
+.krow{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;}
+.kpi{background:${C.white};border:1px solid ${C.border};border-radius:10px;padding:14px 16px;box-shadow:${C.shadow};}
+.kpi-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:7px;}
+.klbl{font-size:9px;font-weight:700;color:${C.gray400};text-transform:uppercase;letter-spacing:.6px;}
+.kpi-dot{width:7px;height:7px;border-radius:50%;}
+.kval{font-size:21px;font-weight:800;color:${C.black};font-family:'Montserrat',sans-serif;line-height:1;margin-bottom:3px;}
+.ksub{font-size:10px;color:${C.gray400};}
+.cc{background:${C.white};border:1px solid ${C.border};border-radius:10px;padding:18px;box-shadow:${C.shadow};}
+.cc.filt{border-color:${C.red};border-width:2px;}
+.cct{font-size:13px;font-weight:700;color:${C.black};margin-bottom:2px;font-family:'Montserrat',sans-serif;}
+.ccs{font-size:11px;color:${C.gray400};margin-bottom:14px;padding-bottom:11px;border-bottom:1px solid ${C.gray100};}
+.d2{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.d3{display:grid;grid-template-columns:2fr 1fr;gap:12px;}
+.filt-bar{display:flex;align-items:center;gap:8px;padding:9px 14px;background:${C.white};border:1px solid ${C.red};border-radius:8px;font-size:12px;color:${C.red};flex-wrap:wrap;}
+.tt{width:100%;border-collapse:collapse;font-size:12px;}
+.tt th{font-size:9px;font-weight:700;color:${C.gray400};text-transform:uppercase;letter-spacing:.5px;padding:8px 10px;text-align:left;border-bottom:2px solid ${C.gray200};white-space:nowrap;background:${C.gray50};}
+.tt td{padding:7px 10px;border-bottom:1px solid ${C.gray100};color:${C.gray600};}
+.tt td:first-child{color:${C.black};font-weight:600;}
+.tt tr:hover td{background:${C.gray50};}
+.tt tr:last-child td{border-bottom:none;}
+/* DATE FILTER */
+.dfilt{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.dfilt-lbl{font-size:11px;font-weight:600;color:${C.gray600};}
+.dfilt-inp{background:${C.white};border:1px solid ${C.border};border-radius:6px;padding:5px 10px;font-size:12px;color:${C.text};font-family:'Open Sans',sans-serif;outline:none;}
+.dfilt-inp:focus{border-color:${C.red};}
+/* PROFILE MODAL */
+.prof-av{width:80px;height:80px;border-radius:50%;background:${C.red};display:flex;align-items:center;justify-content:center;font-size:26px;font-weight:700;color:#fff;margin:0 auto 14px;overflow:hidden;cursor:pointer;border:3px solid ${C.border};position:relative;}
+.prof-av img{width:100%;height:100%;object-fit:cover;}
+.prof-av-overlay{position:absolute;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .15s;border-radius:50%;}
+.prof-av:hover .prof-av-overlay{opacity:1;}
+/* STAGE FORM SELECTOR */
+.stage-sel{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px;}
+@media(max-width:1100px){.krow{grid-template-columns:repeat(3,1fr);}}
+@media(max-width:768px){.d2,.d3,.fgrid,.igrid,.stage-sel,.krow,.ssel,.rz-grid{grid-template-columns:1fr;}.pipe{padding:8px;}.scol{min-width:200px;}.sopts{grid-template-columns:1fr 1fr;}}
+  `;
+  document.head.appendChild(s);
+};
+
+// ══════════════════════════════════════════════════════
+// CANVAS CHARTS v7b — labels legibles, sin solapamientos
+// ══════════════════════════════════════════════════════
+
+// Tooltip como div React
+function CTip({tip}) {
+  if(!tip) return null;
+  return <div style={{
+    position:"absolute",left:tip.x,top:tip.y,transform:"translate(-50%,-110%)",
+    background:"rgba(28,28,28,.95)",border:"1px solid rgba(255,255,255,.15)",
+    borderRadius:7,padding:"7px 11px",pointerEvents:"none",zIndex:99,minWidth:110,
+    boxShadow:"0 4px 14px rgba(0,0,0,.3)"
+  }}>
+    {tip.lines.map((l,i)=><div key={i} style={{
+      fontSize:i===0?10:12,fontWeight:i===0?500:700,lineHeight:1.5,whiteSpace:"nowrap",
+      color:i===0?"rgba(255,255,255,.6)":"#fff",fontFamily:"Montserrat,sans-serif"
+    }}>{l}</div>)}
+  </div>;
+}
+
+// Dibuja texto con contorno blanco sólido — 100% legible sobre cualquier fondo
+function txtHalo(ctx, text, x, y, fillColor, font, align, baseline) {
+  ctx.save();
+  ctx.font = font;
+  ctx.textAlign = align;
+  ctx.textBaseline = baseline;
+  // Contorno blanco grueso primero
+  ctx.strokeStyle = "rgba(255,255,255,1)";
+  ctx.lineWidth = 4;
+  ctx.lineJoin = "round";
+  ctx.strokeText(text, x, y);
+  // Texto coloreado encima
+  ctx.fillStyle = fillColor;
+  ctx.fillText(text, x, y);
+  ctx.restore();
+}
+
+// BarChart
+function BarChart({data, height=210, valueKey="value", labelKey="name", colorKey="color",
+                   defaultColor=C.gray700, formatVal=v=>v, onBarClick, activeIndex=null, tipFn=null}) {
+  const ref=useRef(); const [hov,setHov]=useState(-1); const [tip,setTip]=useState(null);
+  const PL=30,PR=8,PT=22,PB=46;
+  const draw=useCallback((hi)=>{
+    const cv=ref.current; if(!cv||!data.length) return;
+    const ctx=cv.getContext("2d"),dpr=window.devicePixelRatio||1;
+    const W=cv.offsetWidth,H=height;
+    cv.width=W*dpr; cv.height=H*dpr; ctx.scale(dpr,dpr); ctx.clearRect(0,0,W,H);
+    const max=Math.max(...data.map(d=>d[valueKey]||0),1);
+    const cW=W-PL-PR,cH=H-PT-PB,gap=cW/data.length,bW=Math.max(16,gap*.58);
+    // grid
+    [.25,.5,.75,1].forEach(f=>{
+      const gy=PT+cH*(1-f);
+      ctx.beginPath();ctx.moveTo(PL,gy);ctx.lineTo(W-PR,gy);ctx.strokeStyle="#e8e8e8";ctx.lineWidth=.7;ctx.stroke();
+      ctx.fillStyle=C.gray400;ctx.font="500 8px Open Sans,sans-serif";ctx.textAlign="right";ctx.textBaseline="middle";
+      ctx.fillText(formatVal(Math.round(max*f)),PL-3,gy);
+    });
+    data.forEach((d,i)=>{
+      const val=d[valueKey]||0, bH=Math.max((val/max)*cH,val>0?2:0);
+      const bx=PL+i*gap+(gap-bW)/2, by=PT+cH-bH;
+      const col=d[colorKey]||defaultColor;
+      const active=activeIndex===null||activeIndex===i, hvr=hi===i;
+      ctx.globalAlpha=active?1:.22;
+      ctx.fillStyle=col;
+      ctx.beginPath();ctx.roundRect(bx,by,bW,bH,3);ctx.fill();
+      if(hvr&&active){ctx.strokeStyle=col;ctx.lineWidth=2;ctx.beginPath();ctx.roundRect(bx-1,by-1,bW+2,bH+2,4);ctx.stroke();}
+      ctx.globalAlpha=1;
+      if(val>0){
+        const lbl=formatVal(val);
+        const inside=bH>22;
+        if(inside){
+          // blanco dentro de barra oscura
+          ctx.fillStyle="rgba(255,255,255,.95)";ctx.font="700 10px Montserrat,sans-serif";ctx.textAlign="center";ctx.textBaseline="middle";
+          ctx.fillText(lbl,bx+bW/2,by+bH/2);
+        } else {
+          // encima de la barra — color del dato con halo blanco para legibilidad
+          txtHalo(ctx,lbl,bx+bW/2,by-3,col,"700 10px Montserrat,sans-serif","center","bottom");
+        }
+      }
+      // etiqueta eje x
+      const nm=d[labelKey]||"",ws=nm.split(" ");
+      let l1=ws[0]||"",l2=ws.slice(1).join(" ");
+      if(l1.length>7)l1=l1.slice(0,6)+"…"; if(l2.length>7)l2=l2.slice(0,6)+"…";
+      ctx.fillStyle=active?(hvr?C.black:C.gray600):C.gray300;
+      ctx.font="500 9px Open Sans,sans-serif";ctx.textAlign="center";ctx.textBaseline="top";
+      ctx.fillText(l1,bx+bW/2,H-PB+4); if(l2)ctx.fillText(l2,bx+bW/2,H-PB+15);
+    });
+    ctx.beginPath();ctx.moveTo(PL,PT+cH);ctx.lineTo(W-PR,PT+cH);ctx.strokeStyle=C.gray300;ctx.lineWidth=1;ctx.stroke();
+  },[data,height,activeIndex,formatVal]);
+  useEffect(()=>draw(hov),[draw,hov]);
+  const getI=e=>{const r=ref.current.getBoundingClientRect(),x=e.clientX-r.left,gap=(ref.current.offsetWidth-PL-PR)/data.length,i=Math.floor((x-PL)/gap);return i>=0&&i<data.length?i:-1;};
+  const onMove=e=>{const i=getI(e);setHov(i);if(i>=0&&tipFn){const r=ref.current.getBoundingClientRect();setTip({x:e.clientX-r.left,y:e.clientY-r.top,lines:tipFn(data[i])});}else setTip(null);};
+  return <div style={{position:"relative"}}>
+    <canvas ref={ref} style={{width:"100%",height:height+"px",display:"block",cursor:onBarClick?"pointer":"default"}}
+      onClick={e=>{if(!onBarClick)return;const i=getI(e);if(i>=0)onBarClick(i);}}
+      onMouseMove={onMove} onMouseLeave={()=>{setHov(-1);setTip(null);}}/>
+    <CTip tip={tip}/>
+  </div>;
+}
+
+// ComboChart — barras + línea roja con etiquetas sin colisión
+function ComboChart({data,height=240,barKey="count",lineKey="monto",lblKey="label",
+                     barLabel="Cantidad",lineLabel="Monto",barColFn,onBarClick,activeIndex=null}) {
+  const ref=useRef(); const [hov,setHov]=useState(-1); const [tip,setTip]=useState(null);
+  const PL=30,PR=70,PT=24,PB=50;
+  const fmtM=v=>v>=1e6?`Q${(v/1e6).toFixed(1)}M`:v>=1000?`Q${(v/1000).toFixed(0)}K`:`Q${v}`;
+  const getCol=barColFn||(i=>i%2===0?C.gray700:C.gray500);
+  const draw=useCallback((hi)=>{
+    const cv=ref.current; if(!cv||!data.length) return;
+    const ctx=cv.getContext("2d"),dpr=window.devicePixelRatio||1;
+    const W=cv.offsetWidth,H=height;
+    cv.width=W*dpr; cv.height=H*dpr; ctx.scale(dpr,dpr); ctx.clearRect(0,0,W,H);
+    const maxB=Math.max(...data.map(d=>d[barKey]||0),1);
+    const maxL=Math.max(...data.map(d=>d[lineKey]||0),1);
+    const cW=W-PL-PR,cH=H-PT-PB,gap=cW/data.length,bW=Math.max(18,gap*.54);
+    // grid
+    [.25,.5,.75,1].forEach(f=>{
+      const gy=PT+cH*(1-f);
+      ctx.beginPath();ctx.moveTo(PL,gy);ctx.lineTo(W-PR,gy);ctx.strokeStyle="#eee";ctx.lineWidth=.7;ctx.stroke();
+    });
+    // barras
+    data.forEach((d,i)=>{
+      const val=d[barKey]||0, bH=Math.max((val/maxB)*cH,val>0?2:0);
+      const bx=PL+i*gap+(gap-bW)/2, by=PT+cH-bH;
+      const col=getCol(i);
+      const active=activeIndex===null||activeIndex===i, hvr=hi===i;
+      ctx.globalAlpha=active?.88:.2;
+      ctx.fillStyle=col;ctx.beginPath();ctx.roundRect(bx,by,bW,bH,3);ctx.fill();
+      if(hvr&&active){ctx.globalAlpha=1;ctx.strokeStyle=col;ctx.lineWidth=2;ctx.beginPath();ctx.roundRect(bx-1,by-1,bW+2,bH+2,4);ctx.stroke();}
+      ctx.globalAlpha=1;
+      // valor de barra — dentro si hay espacio, encima con halo si no
+      if(val>0){
+        const lbl=String(val);
+        const inside=bH>22;
+        if(inside){
+          ctx.fillStyle="rgba(255,255,255,.95)";ctx.font="700 10px Montserrat,sans-serif";ctx.textAlign="center";ctx.textBaseline="middle";
+          ctx.fillText(lbl,bx+bW/2,by+bH/2);
+        } else {
+          txtHalo(ctx,lbl,bx+bW/2,by-3,col,"700 10px Montserrat,sans-serif","center","bottom");
+        }
+      }
+      // etiqueta x
+      const nm=d[lblKey]||"",ws=nm.split(" ");
+      let l1=ws[0]||"",l2=ws.slice(1).join(" ");
+      if(l1.length>6)l1=l1.slice(0,5)+"…"; if(l2.length>6)l2=l2.slice(0,5)+"…";
+      ctx.fillStyle=active?(hvr?C.black:C.gray600):C.gray300;
+      ctx.font="500 9px Open Sans,sans-serif";ctx.textAlign="center";ctx.textBaseline="top";
+      ctx.fillText(l1,bx+bW/2,H-PB+4); if(l2)ctx.fillText(l2,bx+bW/2,H-PB+15);
+    });
+    // área bajo la línea roja
+    if(data.length>1){
+      ctx.beginPath();
+      data.forEach((d,i)=>{const x=PL+i*gap+gap/2,y=PT+cH-(d[lineKey]||0)/maxL*cH;i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);});
+      ctx.lineTo(PL+(data.length-1)*gap+gap/2,PT+cH);ctx.lineTo(PL+gap/2,PT+cH);ctx.closePath();
+      ctx.fillStyle="rgba(200,16,46,.07)";ctx.fill();
+    }
+    // línea roja
+    ctx.beginPath();ctx.strokeStyle=C.red;ctx.lineWidth=2.5;ctx.lineJoin="round";
+    data.forEach((d,i)=>{const x=PL+i*gap+gap/2,y=PT+cH-(d[lineKey]||0)/maxL*cH;i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);});
+    ctx.stroke();
+    // dots y etiquetas de monto — nunca sobre el número de la barra
+    data.forEach((d,i)=>{
+      const x=PL+i*gap+gap/2;
+      const lineY=PT+cH-(d[lineKey]||0)/maxL*cH;
+      const barH=Math.max((d[barKey]||0)/maxB*cH,0);
+      const barTop=PT+cH-barH;
+      const hvr=hi===i;
+      // dot
+      ctx.beginPath();ctx.arc(x,lineY,hvr?5:3.5,0,Math.PI*2);ctx.fillStyle=C.white;ctx.fill();
+      ctx.beginPath();ctx.arc(x,lineY,hvr?4:2.5,0,Math.PI*2);ctx.fillStyle=C.red;ctx.fill();
+      if(d[lineKey]>0){
+        const lbl=fmtM(d[lineKey]);
+        // La barra tiene número: dentro si bH>22 (en centro de barra), encima si bH<=22 (a barTop-3)
+        // La línea va: siempre intentar ENCIMA del dot (lineY-14)
+        // Si ese punto está dentro de la zona donde la barra tiene su número encima (barTop-18 a barTop),
+        // mover la etiqueta de línea todavía más arriba (lineY-26)
+        // Si la línea está POR DEBAJO de la barra, ir abajo del dot (lineY+14)
+        let labelY;
+        if(lineY >= barTop){ 
+          // línea está dentro o debajo de la barra → etiqueta debajo del dot
+          labelY = lineY+14;
+        } else {
+          // línea está encima de la barra
+          const barNumY = barH<=22 ? barTop-10 : -999; // posición del número de barra si está "encima"
+          const candidate = lineY-14;
+          if(Math.abs(candidate - barNumY) < 14){
+            labelY = lineY-26; // alejarse más arriba
+          } else {
+            labelY = candidate;
+          }
+        }
+        // No salirse del área superior
+        if(labelY < PT+6) labelY = lineY+14;
+        txtHalo(ctx,lbl,x,labelY,C.red,"700 9px Montserrat,sans-serif","center","middle");
+      }
+    });
+    // baseline
+    ctx.beginPath();ctx.moveTo(PL,PT+cH);ctx.lineTo(W-PR,PT+cH);ctx.strokeStyle=C.gray300;ctx.lineWidth=1;ctx.stroke();
+    // leyenda
+    const lx=W-PR+6,ly=PT+6;
+    ctx.fillStyle=getCol(0);ctx.globalAlpha=.88;ctx.fillRect(lx,ly,10,10);ctx.globalAlpha=1;
+    ctx.fillStyle=C.gray600;ctx.font="600 9px Open Sans,sans-serif";ctx.textAlign="left";ctx.textBaseline="middle";ctx.fillText(barLabel,lx+13,ly+5);
+    ctx.beginPath();ctx.moveTo(lx,ly+22);ctx.lineTo(lx+10,ly+22);ctx.strokeStyle=C.red;ctx.lineWidth=2.5;ctx.stroke();
+    ctx.beginPath();ctx.arc(lx+5,ly+22,3,0,Math.PI*2);ctx.fillStyle=C.red;ctx.fill();
+    ctx.fillStyle=C.red;ctx.fillText(lineLabel,lx+13,ly+22);
+  },[data,height,activeIndex,getCol,barKey,lineKey,lblKey,barLabel,lineLabel]);
+  useEffect(()=>draw(hov),[draw,hov]);
+  const getI=e=>{const r=ref.current.getBoundingClientRect(),x=e.clientX-r.left,gap=(ref.current.offsetWidth-PL-PR)/data.length,i=Math.floor((x-PL)/gap);return i>=0&&i<data.length?i:-1;};
+  const onMove=e=>{const i=getI(e);setHov(i);if(i>=0){const d=data[i];const r=ref.current.getBoundingClientRect();setTip({x:e.clientX-r.left,y:e.clientY-r.top,lines:[d[lblKey]||"",`${barLabel}: ${d[barKey]||0}`,`${lineLabel}: ${fmtM(d[lineKey]||0)}`]});}else setTip(null);};
+  return <div style={{position:"relative"}}>
+    <canvas ref={ref} style={{width:"100%",height:height+"px",display:"block",cursor:onBarClick?"pointer":"default"}}
+      onClick={e=>{if(!onBarClick)return;const i=getI(e);if(i>=0)onBarClick(i);}}
+      onMouseMove={onMove} onMouseLeave={()=>{setHov(-1);setTip(null);}}/>
+    <CTip tip={tip}/>
+  </div>;
+}
+
+function TimeLineChart({data,height=240,onBarClick,activeIndex}) {
+  return <ComboChart data={data} height={height} barKey="count" lineKey="monto" lblKey="label"
+    barLabel="Cantidad" lineLabel="Monto" barColFn={i=>i%2===0?C.gray700:C.gray500}
+    onBarClick={onBarClick} activeIndex={activeIndex}/>;
+}
+function RamoComboChart({data,height=250,onBarClick,activeIndex}) {
+  return <ComboChart data={data.map(d=>({...d,label:d.name}))} height={height}
+    barKey="count" lineKey="monto" lblKey="label" barLabel="Cantidad" lineLabel="Monto"
+    barColFn={i=>i%2===0?C.gray700:C.red} onBarClick={onBarClick} activeIndex={activeIndex}/>;
+}
+
+// AreaComboChart — barra escalonada gris+rojo, etiquetas siempre legibles
+function AreaComboChart({data,height=240,onBarClick,activeIndex}) {
+  const ref=useRef(); const [hov,setHov]=useState(-1); const [tip,setTip]=useState(null);
+  const PL=12,PR=10,PT=28,PB=44;
+  const draw=useCallback((hi)=>{
+    const cv=ref.current; if(!cv||!data.length) return;
+    const ctx=cv.getContext("2d"),dpr=window.devicePixelRatio||1;
+    const W=cv.offsetWidth,H=height;
+    cv.width=W*dpr; cv.height=H*dpr; ctx.scale(dpr,dpr); ctx.clearRect(0,0,W,H);
+    const max=Math.max(...data.map(d=>d.visits),1);
+    const cW=W-PL-PR,cH=H-PT-PB,gap=cW/data.length,bW=Math.max(26,gap*.65);
+    data.forEach((d,i)=>{
+      const bx=PL+i*gap+(gap-bW)/2;
+      const hTot=Math.max((d.visits/max)*cH,d.visits>0?3:0);
+      const hRep=d.reprocesos>0?Math.max((d.reprocesos/max)*cH,3):0;
+      const hBase=hTot-hRep, barTop=PT+cH-hTot;
+      const active=activeIndex===null||activeIndex===i, hvr=hi===i;
+      const gc=i%2===0?C.gray600:C.gray500;
+      ctx.globalAlpha=active?1:.22;
+      if(hBase>0){ctx.fillStyle=gc;ctx.beginPath();ctx.roundRect(bx,barTop+hRep,bW,hBase,hRep>0?0:3);ctx.fill();}
+      if(hRep>0){ctx.fillStyle=C.red;ctx.beginPath();ctx.roundRect(bx,barTop,bW,hRep,3);ctx.fill();}
+      if(hvr&&active){ctx.globalAlpha=1;ctx.strokeStyle=C.gray500;ctx.lineWidth=1.5;ctx.beginPath();ctx.roundRect(bx-1,barTop-1,bW+2,hTot+2,4);ctx.stroke();}
+      ctx.globalAlpha=1;
+
+      // etiqueta total (visitas) — dentro del segmento gris si hay espacio, sino sobre la barra
+      if(d.visits>0){
+        if(hBase>22){
+          ctx.fillStyle="rgba(255,255,255,.95)";ctx.font="700 10px Montserrat,sans-serif";ctx.textAlign="center";ctx.textBaseline="middle";
+          ctx.fillText(d.visits,bx+bW/2,barTop+hRep+hBase/2);
+        } else {
+          // encima de toda la barra — con halo blanco, color gris oscuro
+          txtHalo(ctx,String(d.visits),bx+bW/2,barTop-4,C.gray700,"700 10px Montserrat,sans-serif","center","bottom");
+        }
+      }
+      // etiqueta reprocesos — dentro del segmento rojo si hay espacio
+      // IMPORTANTE: nunca en la misma posición Y que el total
+      if(d.reprocesos>0){
+        if(hRep>22){
+          ctx.fillStyle="rgba(255,255,255,.95)";ctx.font="700 10px Montserrat,sans-serif";ctx.textAlign="center";ctx.textBaseline="middle";
+          ctx.fillText(d.reprocesos,bx+bW/2,barTop+hRep/2);
+        } else if(hBase>22){
+          // el total ya está dentro, poner reprocesos encima de la barra con halo
+          txtHalo(ctx,"↑"+d.reprocesos,bx+bW/2,barTop-4,C.red,"700 9px Montserrat,sans-serif","center","bottom");
+        } else {
+          // ambos salen: total a -4, reprocesos a -16 (escalonados)
+          txtHalo(ctx,"↑"+d.reprocesos,bx+bW/2,barTop-16,C.red,"700 9px Montserrat,sans-serif","center","bottom");
+        }
+      }
+      const lbl=d.name.length>9?d.name.slice(0,8)+"…":d.name;
+      ctx.fillStyle=active?(hvr?C.black:C.gray600):C.gray300;
+      ctx.font="500 9px Open Sans,sans-serif";ctx.textAlign="center";ctx.textBaseline="top";
+      ctx.fillText(lbl,bx+bW/2,H-PB+4);
+    });
+    ctx.beginPath();ctx.moveTo(PL,PT+cH);ctx.lineTo(W-PR,PT+cH);ctx.strokeStyle=C.gray300;ctx.lineWidth=1;ctx.stroke();
+    const lx=PL,ly=8;
+    ctx.fillStyle=C.gray600;ctx.fillRect(lx,ly,10,8);
+    ctx.fillStyle=C.gray700;ctx.font="600 9px Open Sans,sans-serif";ctx.textAlign="left";ctx.textBaseline="middle";ctx.fillText("Tránsitos totales",lx+13,ly+4);
+    ctx.fillStyle=C.red;ctx.fillRect(lx+138,ly,10,8);
+    ctx.fillStyle=C.red;ctx.fillText("Reprocesos",lx+151,ly+4);
+  },[data,height,activeIndex]);
+  useEffect(()=>draw(hov),[draw,hov]);
+  const getI=e=>{const r=ref.current.getBoundingClientRect(),x=e.clientX-r.left,gap=(ref.current.offsetWidth-PL-PR)/data.length,i=Math.floor((x-PL)/gap);return i>=0&&i<data.length?i:-1;};
+  const onMove=e=>{const i=getI(e);setHov(i);if(i>=0){const d=data[i];const r=ref.current.getBoundingClientRect();setTip({x:e.clientX-r.left,y:e.clientY-r.top,lines:[d.name,`Tránsitos: ${d.visits}`,`Reprocesos: ${d.reprocesos}`]});}else setTip(null);};
+  return <div style={{position:"relative"}}>
+    <canvas ref={ref} style={{width:"100%",height:height+"px",display:"block",cursor:onBarClick?"pointer":"default"}}
+      onClick={e=>{if(!onBarClick)return;const i=getI(e);if(i>=0)onBarClick(i);}}
+      onMouseMove={onMove} onMouseLeave={()=>{setHov(-1);setTip(null);}}/>
+    <CTip tip={tip}/>
+  </div>;
+}
+
+// HBarChart — horizontal, tooltip
+function HBarChart({data,height=200,color=C.gray600,onBarClick,activeIndex}) {
+  const ref=useRef(); const [hov,setHov]=useState(-1); const [tip,setTip]=useState(null);
+  const PL=148,PR=46,PT=6,BH=22,GAP=32;
+  const draw=useCallback((hi)=>{
+    const cv=ref.current; if(!cv||!data.length) return;
+    const ctx=cv.getContext("2d"),dpr=window.devicePixelRatio||1;
+    const H=Math.max(height,data.length*GAP+PT+20),W=cv.offsetWidth;
+    cv.width=W*dpr; cv.height=H*dpr; ctx.scale(dpr,dpr); cv.style.height=H+"px"; ctx.clearRect(0,0,W,H);
+    const max=Math.max(...data.map(d=>d.value),1),maxBW=W-PL-PR;
+    data.forEach((d,i)=>{
+      const y=PT+i*GAP, bW=Math.max((d.value||0)/max*maxBW,d.value>0?4:0);
+      const col=d.color||color;
+      const active=activeIndex===null||activeIndex===i, hvr=hi===i;
+      ctx.globalAlpha=active?.88:.22;ctx.fillStyle=col;ctx.beginPath();ctx.roundRect(PL,y,bW,BH,3);ctx.fill();
+      if(hvr&&active){ctx.globalAlpha=1;ctx.strokeStyle=col;ctx.lineWidth=1.5;ctx.beginPath();ctx.roundRect(PL-1,y-1,bW+2,BH+2,4);ctx.stroke();}
+      ctx.globalAlpha=1;
+      ctx.fillStyle=active?(hvr?C.black:C.gray700):C.gray300;ctx.font="500 10px Open Sans,sans-serif";ctx.textAlign="right";ctx.textBaseline="middle";ctx.fillText(d.name,PL-6,y+BH/2);
+      if(d.value>0){
+        const inside=bW>36;
+        if(inside){
+          ctx.fillStyle="rgba(255,255,255,.95)";ctx.font="700 10px Montserrat,sans-serif";ctx.textAlign="right";ctx.textBaseline="middle";
+          ctx.fillText(d.value,PL+bW-6,y+BH/2);
+        } else {
+          txtHalo(ctx,String(d.value),PL+bW+5,y+BH/2,col,"700 10px Montserrat,sans-serif","left","middle");
+        }
+      }
+    });
+  },[data,height,activeIndex,color]);
+  useEffect(()=>draw(hov),[draw,hov]);
+  const getI=e=>{const r=ref.current.getBoundingClientRect(),y=e.clientY-r.top,i=Math.floor((y-PT)/GAP);return i>=0&&i<data.length?i:-1;};
+  const onMove=e=>{const i=getI(e);setHov(i);if(i>=0){const d=data[i];const r=ref.current.getBoundingClientRect();setTip({x:e.clientX-r.left,y:e.clientY-r.top,lines:[d.name,`${d.value} días`]});}else setTip(null);};
+  return <div style={{position:"relative"}}>
+    <canvas ref={ref} style={{width:"100%",display:"block",cursor:onBarClick?"pointer":"default"}}
+      onClick={e=>{if(!onBarClick)return;const i=getI(e);if(i>=0)onBarClick(i);}}
+      onMouseMove={onMove} onMouseLeave={()=>{setHov(-1);setTip(null);}}/>
+    <CTip tip={tip}/>
+  </div>;
+}
+
+// ══════════════════════════════════════════════════════
+// LOGIN
+// ══════════════════════════════════════════════════════
+function Login({onLogin}) {
+  const [u,setU]=useState(""); const [p,setP]=useState(""); const [err,setErr]=useState(""); const [loading,setLoading]=useState(false);
+  const [showReset,setShowReset]=useState(false);
+  const [resetU,setResetU]=useState(""); const [resetMsg,setResetMsg]=useState(""); const [resetErr,setResetErr]=useState(""); const [resetLoading,setResetLoading]=useState(false);
+  useEffect(()=>injectCSS(),[]);
+
+  const go=async()=>{
+    setErr(""); setLoading(true);
+    const emailMap = {
+      "ajaquino": "ajaquino@aseguradorageneral.com",
+      "jortiz":   "jortiz@aseguradorageneral.com",
+    };
+    const email = emailMap[u.trim().toLowerCase()];
+    if(!email){ setErr("Usuario o contraseña incorrectos."); setLoading(false); return; }
+    const {data, error} = await supa.auth.signInWithPassword({email, password: p});
+    if(error || !data?.user){ setErr("Usuario o contraseña incorrectos."); setLoading(false); return; }
+    const usr = EMAIL_MAP[data.user.email];
+    if(!usr){ setErr("Usuario no autorizado."); setLoading(false); return; }
+    onLogin(usr);
+    setLoading(false);
+  };
+
+  const sendReset=async()=>{
+    setResetErr(""); setResetMsg(""); setResetLoading(true);
+    const emailMap = {
+      "ajaquino": "ajaquino@aseguradorageneral.com",
+      "jortiz":   "jortiz@aseguradorageneral.com",
+    };
+    const email = emailMap[resetU.trim().toLowerCase()];
+    if(!email){ setResetErr("Usuario no reconocido."); setResetLoading(false); return; }
+    const {error} = await supa.auth.resetPasswordForEmail(email, {
+      redirectTo: window.location.href,
+    });
+    if(error){ setResetErr("Error al enviar el correo. Intenta de nuevo."); }
+    else { setResetMsg(`Se envió un enlace de recuperación al correo asociado a "${resetU}". Revisa tu bandeja de entrada.`); }
+    setResetLoading(false);
+  };
+
+  if(showReset) return (
+    <div className="lw">
+      <div className="lbrand">
+        <img src="data:image/png;base64,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" alt="AG" style={{height:64,width:"auto",marginBottom:12}}/>
+        <div style={{fontFamily:"Montserrat,sans-serif",fontWeight:800,fontSize:18,color:"#fff",letterSpacing:"1px",textAlign:"center",lineHeight:1.1}}>ASEGURADORA</div>
+        <div style={{fontFamily:"Montserrat,sans-serif",fontWeight:900,fontSize:22,color:"#C8102E",letterSpacing:"1px",textAlign:"center"}}>GENERAL</div>
+        <div className="lbrand-div"/>
+        <div className="lbrand-tagline">Sistema de Gestión</div>
+        <div className="lbrand-title">Pipeline Comercial<br/>Canales Alternos</div>
+      </div>
+      <div className="lform">
+        <div className="lcard">
+          <div className="lcard-title">Recuperar Contraseña</div>
+          <div className="lcard-sub">Ingresa tu usuario y te enviaremos un enlace a tu correo.</div>
+          <div style={{marginBottom:16}}><div className="fl">Usuario</div><input className="fi" placeholder="nombre de usuario" value={resetU} onChange={e=>setResetU(e.target.value)} onKeyDown={e=>e.key==="Enter"&&sendReset()}/></div>
+          {resetErr&&<div style={{color:C.red,fontSize:12,marginBottom:8,fontWeight:600}}>{resetErr}</div>}
+          {resetMsg&&<div style={{color:C.green,fontSize:12,marginBottom:8,fontWeight:600,lineHeight:1.4}}>{resetMsg}</div>}
+          {!resetMsg&&<button className="btn br" style={{width:"100%",padding:11,fontSize:13,marginTop:4}} onClick={sendReset} disabled={resetLoading}>
+            {resetLoading ? "Enviando…" : "Enviar enlace →"}
+          </button>}
+          <div style={{textAlign:"center",marginTop:16}}>
+            <span onClick={()=>setShowReset(false)} style={{fontSize:12,color:C.gray500,cursor:"pointer",textDecoration:"underline"}}>← Volver al inicio de sesión</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+  return (
+    <div className="lw">
+      <div className="lbrand">
+        <img src="data:image/png;base64,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" alt="AG" style={{height:64,width:"auto",marginBottom:12}}/>
+        <div style={{fontFamily:"Montserrat,sans-serif",fontWeight:800,fontSize:18,color:"#fff",letterSpacing:"1px",textAlign:"center",lineHeight:1.1}}>ASEGURADORA</div>
+        <div style={{fontFamily:"Montserrat,sans-serif",fontWeight:900,fontSize:22,color:"#C8102E",letterSpacing:"1px",textAlign:"center"}}>GENERAL</div>
+        <div className="lbrand-div"/>
+        <div className="lbrand-tagline">Sistema de Gestión</div>
+        <div className="lbrand-title">Pipeline Comercial<br/>Canales Alternos</div>
+      </div>
+      <div className="lform">
+        <div className="lcard">
+          <div className="lcard-title">Bienvenido</div>
+          <div className="lcard-sub">Ingresa tus credenciales para acceder.</div>
+          <div style={{marginBottom:13}}><div className="fl">Usuario</div><input className="fi" placeholder="nombre de usuario" value={u} onChange={e=>setU(e.target.value)} onKeyDown={e=>e.key==="Enter"&&go()}/></div>
+          <div style={{marginBottom:6}}><div className="fl">Contraseña</div><input className="fi" type="password" placeholder="••••••••" value={p} onChange={e=>setP(e.target.value)} onKeyDown={e=>e.key==="Enter"&&go()}/></div>
+          {err&&<div style={{color:C.red,fontSize:12,marginBottom:8,fontWeight:600}}>{err}</div>}
+          <button className="btn br" style={{width:"100%",padding:11,fontSize:13,marginTop:10}} onClick={go} disabled={loading}>
+            {loading ? "Ingresando…" : "Ingresar →"}
+          </button>
+          <div style={{textAlign:"center",marginTop:14}}>
+            <span onClick={()=>setShowReset(true)} style={{fontSize:12,color:C.gray400,cursor:"pointer",textDecoration:"underline"}}>¿Olvidaste tu contraseña?</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════
+// PROFILE MODAL
+// ══════════════════════════════════════════════════════
+function ProfileModal({user, onSave, onClose}) {
+  const [pwd,setPwd]=useState(""); const [pwd2,setPwd2]=useState(""); const [err,setErr]=useState(""); const [ok,setOk]=useState("");
+  const fileRef=useRef();
+  const [preview,setPreview]=useState(user.photo||null);
+
+  const handlePhoto=e=>{
+    const f=e.target.files?.[0]; if(!f) return;
+    const r=new FileReader();
+    r.onload=ev=>setPreview(ev.target.result);
+    r.readAsDataURL(f);
+  };
+
+  const save=()=>{
+    setErr(""); setOk("");
+    if(pwd){
+      if(pwd.length<6){setErr("Mínimo 6 caracteres.");return;}
+      if(pwd!==pwd2){setErr("Las contraseñas no coinciden.");return;}
+    }
+    onSave({...user, password:pwd||user.password, photo:preview});
+    setOk("✓ Cambios guardados."); setPwd(""); setPwd2("");
+  };
+
+  return (
+    <div className="ov" onClick={onClose}>
+      <div className="mo mosm" onClick={e=>e.stopPropagation()}>
+        <div className="mt"><span>Mi Perfil</span><button className="mx" onClick={onClose}>✕</button></div>
+        <div className="prof-av" onClick={()=>fileRef.current.click()}>
+          {preview?<img src={preview} alt="foto"/>:<span>{user.initials}</span>}
+          <div className="prof-av-overlay"><span style={{color:"#fff",fontSize:11,fontWeight:600}}>Cambiar</span></div>
+        </div>
+        <input ref={fileRef} type="file" accept="image/*" style={{display:"none"}} onChange={handlePhoto}/>
+        <div style={{textAlign:"center",marginBottom:16}}>
+          <div style={{fontWeight:700,fontSize:14,color:C.black}}>{user.name}</div>
+          <div style={{fontSize:11,color:C.gray500}}>{user.title}</div>
+          <div style={{fontSize:11,color:C.gray400}}>@{user.username}</div>
+        </div>
+        <div className="fsec">Cambiar Contraseña</div>
+        <div style={{marginBottom:11}}><div className="fl">Nueva Contraseña</div><input className="fi" type="password" placeholder="••••••••" value={pwd} onChange={e=>setPwd(e.target.value)}/></div>
+        <div style={{marginBottom:14}}><div className="fl">Confirmar Contraseña</div><input className="fi" type="password" placeholder="••••••••" value={pwd2} onChange={e=>setPwd2(e.target.value)}/></div>
+        {err&&<div style={{color:C.red,fontSize:12,marginBottom:8,fontWeight:600}}>{err}</div>}
+        {ok&&<div style={{color:C.green,fontSize:12,marginBottom:8,fontWeight:600}}>{ok}</div>}
+        <button className="btn br" style={{width:"100%"}} onClick={save}>Guardar Cambios</button>
+      </div>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════
+// DEAL FORM (crear / editar)
+// ══════════════════════════════════════════════════════
+function DealForm({deal, onSave, onClose, user}) {
+  const editing=!!deal;
+  const [f,setF]=useState(deal?{...deal}:{
+    cliente:"",monto:"",asegurados:"",ramo:"",otroRamo:"",
+    fechaInicio:todayISO(),stage:"acercamiento",subArea:null,
+    status:"negociacion",razonesP:[],
+  });
+  const upd=(k,v)=>setF(p=>({...p,[k]:v}));
+  const isAcr=f.stage==="acercamiento";
+  const toggleRazon=id=>upd("razonesP",f.razonesP.includes(id)?f.razonesP.filter(r=>r!==id):[...f.razonesP,id]);
+
+  const save=()=>{
+    if(!f.cliente.trim()) return;
+    if(f.status==="perdida"&&!f.razonesP.length){alert("Selecciona al menos una razón de pérdida.");return;}
+    if(editing) onSave({...deal,...f});
+    else onSave({id:Date.now(),...f,history:[{stage:f.stage,subArea:null,enteredAt:Date.now()}],stageCounts:{[f.stage]:1},assignedTo:user.id,comments:[]});
+  };
+
+  return (
+    <div className="ov" onClick={onClose}>
+      <div className="mo" style={{width:560}} onClick={e=>e.stopPropagation()}>
+        <div className="mt"><span>{editing?"✏️ Editar":"➕ Nuevo Negocio"}</span><button className="mx" onClick={onClose}>✕</button></div>
+
+        {!editing&&(
+          <>
+            <div className="fl">Fase inicial</div>
+            <div className="stage-sel">
+              {STAGES.slice(0,2).map(s=>(
+                <div key={s.id} className={`sso ${f.stage===s.id?"act":""}`} style={{"--oc":s.color,"--ob":s.bg}} onClick={()=>upd("stage",s.id)}>
+                  <div className="sdot" style={{background:s.color,width:8,height:8}}/>
+                  <span className="sso-lbl">{s.label}</span>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+
+        <div style={{marginBottom:12}}><div className="fl">Cliente *</div><input className="fi" placeholder="Empresa o persona" value={f.cliente} onChange={e=>upd("cliente",e.target.value)}/></div>
+
+        <div className="fsec">Estatus <span className="fopt">Estado de la oportunidad</span></div>
+        <div className="ssel">
+          {STATUS_OPTS.map(s=>(
+            <div key={s.id} className={`sso ${f.status===s.id?"act":""}`} style={{"--oc":s.color,"--ob":s.bg}} onClick={()=>upd("status",s.id)}>
+              <span style={{fontSize:16}}>{s.icon}</span>
+              <span className="sso-lbl">{s.label}</span>
+            </div>
+          ))}
+        </div>
+
+        {f.status==="perdida"&&(
+          <>
+            <div className="fsec">Razones de Pérdida <span className="fopt">Selección múltiple</span></div>
+            <div className="rz-grid">
+              {RAZONES_PERDIDA.map(r=>(
+                <div key={r.id} className={`rz-item ${f.razonesP.includes(r.id)?"sel":""}`} onClick={()=>toggleRazon(r.id)}>
+                  <div className="rz-cb">{f.razonesP.includes(r.id)&&<span style={{color:"#fff",fontSize:9,fontWeight:700}}>✓</span>}</div>
+                  <span style={{fontSize:11,fontWeight:600,color:C.gray700}}>{r.label}</span>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+
+        <div className="fsec">Datos <span className="fopt">{isAcr&&!editing?"Opcionales en Acercamiento":""}</span></div>
+        <div className="fgrid" style={{marginBottom:11}}>
+          <div><div className="fl">Monto Estimado (Q)</div><input className="fi" placeholder="150,000" value={f.monto} onChange={e=>upd("monto",e.target.value)}/></div>
+          <div><div className="fl">Asegurados Aprox.</div><input className="fi" placeholder="100" value={f.asegurados} onChange={e=>upd("asegurados",e.target.value)}/></div>
+        </div>
+        <div style={{marginBottom:11}}><div className="fl">Fecha Inicio</div><input className="fi" type="date" value={f.fechaInicio} onChange={e=>upd("fechaInicio",e.target.value)}/></div>
+        <div style={{marginBottom:11}}>
+          <div className="fl">Ramo</div>
+          <select className="fi" value={f.ramo} onChange={e=>upd("ramo",e.target.value)}>
+            <option value="">— Sin definir —</option>
+            {RAMOS.map(r=><option key={r}>{r}</option>)}
+          </select>
+        </div>
+        {f.ramo==="Otros"&&<div style={{marginBottom:11}}><div className="fl">Especificar Ramo</div><input className="fi" placeholder="Describe el ramo" value={f.otroRamo} onChange={e=>upd("otroRamo",e.target.value)}/></div>}
+
+        <div style={{display:"flex",gap:9,marginTop:16}}>
+          <button className="btn br" style={{flex:1}} onClick={save}>{editing?"Guardar":"Crear"}</button>
+          <button className="btn bg" onClick={onClose}>Cancelar</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════
+// SUBAREA PICKER
+// ══════════════════════════════════════════════════════
+function SubAreaPicker({current, onSelect, onClose}) {
+  return (
+    <div className="ov" onClick={onClose}>
+      <div className="mo mosm" onClick={e=>e.stopPropagation()}>
+        <div className="mt"><span>Seleccionar Área</span><button className="mx" onClick={onClose}>✕</button></div>
+        <div className="sagrid">
+          {SUBAREAS.map(sa=>(
+            <button key={sa.id} className={`sabtn ${current===sa.id?"cur":""}`} onClick={()=>onSelect(sa.id)}>
+              <span style={{fontSize:15,width:20,textAlign:"center"}}>{sa.icon}</span>
+              <span className="salbl">{sa.label}</span>
+            </button>
+          ))}
+        </div>
+        <button className="btn bg" style={{width:"100%",marginTop:11}} onClick={onClose}>Cancelar</button>
+      </div>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════
+// MOVE MODAL
+// ══════════════════════════════════════════════════════
+function MoveModal({deal, onMove, onClose}) {
+  const [step,setStep]=useState("stages");
+  const go=(sid,sub=null)=>{onMove(deal.id,sid,sub);onClose();};
+  if(step==="sub") return <SubAreaPicker current={deal.subArea} onSelect={sub=>go("otras_areas",sub)} onClose={()=>setStep("stages")}/>;
+  const ALL_MOVE=[...STAGES,{id:"cierre",label:"Cierre / Lanzamiento",color:C.green,bg:C.greenBg,icon:"★"}];
+  return (
+    <div className="ov" onClick={onClose}>
+      <div className="mo mosm" onClick={e=>e.stopPropagation()}>
+        <div className="mt"><span>Mover Etapa</span><button className="mx" onClick={onClose}>✕</button></div>
+        <div className="sopts" style={{gridTemplateColumns:"repeat(3,1fr)"}}>
+          {ALL_MOVE.map(s=>{
+            const cur=deal.stage===s.id;
+            return <div key={s.id} className={`so ${cur?"cur":""}`} style={{"--oc":s.color,"--ob":s.bg}} onClick={()=>{if(cur)return;s.sub?setStep("sub"):go(s.id);}}>
+              <span style={{fontSize:16}}>{s.icon}</span><span className="solbl">{s.label}</span>
+            </div>;
+          })}
+        </div>
+        <button className="btn bg" style={{width:"100%"}} onClick={onClose}>Cancelar</button>
+      </div>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════
+// STATUS CHANGE MODAL (with razones if perdida)
+// ══════════════════════════════════════════════════════
+function StatusModal({deal, onSave, onClose}) {
+  const [status,setStatus]=useState(deal.status||"negociacion");
+  const [razones,setRazones]=useState(deal.razonesP||[]);
+  const toggle=id=>setRazones(p=>p.includes(id)?p.filter(r=>r!==id):[...p,id]);
+  const save=()=>{
+    if(status==="perdida"&&!razones.length){alert("Selecciona al menos una razón.");return;}
+    onSave(deal.id,status,razones);
+    onClose();
+  };
+  return (
+    <div className="ov" onClick={onClose}>
+      <div className="mo mosm" onClick={e=>e.stopPropagation()}>
+        <div className="mt"><span>Cambiar Estatus</span><button className="mx" onClick={onClose}>✕</button></div>
+        <div className="ssel">
+          {STATUS_OPTS.map(s=>(
+            <div key={s.id} className={`sso ${status===s.id?"act":""}`} style={{"--oc":s.color,"--ob":s.bg}} onClick={()=>setStatus(s.id)}>
+              <span style={{fontSize:16}}>{s.icon}</span><span className="sso-lbl">{s.label}</span>
+            </div>
+          ))}
+        </div>
+        {status==="perdida"&&(
+          <>
+            <div className="fsec">Razones de Pérdida</div>
+            <div className="rz-grid">
+              {RAZONES_PERDIDA.map(r=>(
+                <div key={r.id} className={`rz-item ${razones.includes(r.id)?"sel":""}`} onClick={()=>toggle(r.id)}>
+                  <div className="rz-cb">{razones.includes(r.id)&&<span style={{color:"#fff",fontSize:9,fontWeight:700}}>✓</span>}</div>
+                  <span style={{fontSize:11,fontWeight:600,color:C.gray700}}>{r.label}</span>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+        <div style={{display:"flex",gap:9,marginTop:14}}>
+          <button className="btn br" style={{flex:1}} onClick={save}>Guardar Estatus</button>
+          <button className="btn bg" onClick={onClose}>Cancelar</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════
+// DEAL DETAIL MODAL
+// ══════════════════════════════════════════════════════
+function DealDetail({deal, onClose, onDelete, onMove, onEdit, onAddComment, onStatusChange, currentUser, allUsers}) {
+  const [showMove,setShowMove]=useState(false);
+  const [showSub,setShowSub]=useState(false);
+  const [showStatus,setShowStatus]=useState(false);
+  const [newCmt,setNewCmt]=useState("");
+  const stage=gS(deal.stage), sub=deal.subArea?gSA(deal.subArea):null;
+  const st=gST(deal.status)||STATUS_OPTS[0];
+  const gU=id=>allUsers.find(u=>u.id===id)||{name:"Sistema",initials:"SYS",photo:null};
+  const tis=()=>fmtDur(Date.now()-deal.history[deal.history.length-1].enteredAt);
+  const tot=fmtDur(Date.now()-new Date(deal.fechaInicio).getTime());
+
+  return (
+    <>
+    <div className="ov" onClick={onClose}>
+      <div className="mo molg" onClick={e=>e.stopPropagation()}>
+        <div className="mt">
+          <div style={{flex:1}}>
+            <div style={{fontSize:15,fontWeight:800,color:C.black}}>{deal.cliente}</div>
+            <div style={{fontSize:10,color:C.gray400,marginTop:2}}>Registrado {deal.fechaInicio} · por {gU(deal.assignedTo).name}</div>
+          </div>
+          <div style={{display:"flex",gap:6,alignItems:"center"}}>
+            <button className="btn bg" style={{fontSize:11,padding:"4px 9px"}} onClick={()=>onEdit(deal)}>✏️ Editar</button>
+            <button className="mx" onClick={onClose}>✕</button>
+          </div>
+        </div>
+
+        {/* Estatus + Etapa */}
+        <div style={{display:"flex",gap:8,marginBottom:14,flexWrap:"wrap"}}>
+          <div style={{display:"flex",alignItems:"center",gap:6,padding:"7px 12px",borderRadius:8,background:st.bg,border:`1px solid ${st.color}30`,flex:1}}>
+            <div className="sdot" style={{background:st.color,width:8,height:8}}/>
+            <span style={{fontSize:12,fontWeight:700,color:st.color}}>{st.label}</span>
+            <button className="btn bg" style={{marginLeft:"auto",fontSize:10,padding:"3px 8px"}} onClick={()=>setShowStatus(true)}>Cambiar</button>
+          </div>
+          <div style={{display:"flex",alignItems:"center",gap:6,padding:"7px 12px",borderRadius:8,background:stage.bg,border:`1px solid ${stage.color}30`,flex:1}}>
+            <div className="sdot" style={{background:stage.color,width:8,height:8}}/>
+            <span style={{fontSize:12,fontWeight:700,color:stage.color}}>{stage.label}</span>
+            {sub&&<span style={{fontSize:11,color:C.gray500}}>· {sub.label}</span>}
+            <button className="btn bg" style={{marginLeft:"auto",fontSize:10,padding:"3px 8px"}} onClick={()=>setShowMove(true)}>Mover</button>
+          </div>
+        </div>
+
+        {/* Razones perdida */}
+        {deal.status==="perdida"&&deal.razonesP?.length>0&&(
+          <div style={{marginBottom:12,padding:"9px 12px",background:C.redBg,border:`1px solid rgba(200,16,46,.2)`,borderRadius:8}}>
+            <div style={{fontSize:10,fontWeight:700,color:C.red,marginBottom:5,textTransform:"uppercase",letterSpacing:".5px"}}>Razones de Pérdida</div>
+            <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
+              {deal.razonesP.map(id=>{const r=RAZONES_PERDIDA.find(x=>x.id===id);return r?<span key={id} style={{padding:"2px 8px",background:C.white,border:`1px solid rgba(200,16,46,.25)`,borderRadius:99,fontSize:10,color:C.red,fontWeight:600}}>{r.label}</span>:null;})}
+            </div>
+          </div>
+        )}
+
+        {/* Datos */}
+        <div className="igrid">
+          {[
+            ["Monto Estimado",  deal.monto?<span style={{color:C.green,fontWeight:800}}>{fmtQ(deal.monto)}</span>:"—"],
+            ["Asegurados",      deal.asegurados||"—"],
+            ["Ramo",            deal.ramo==="Otros"?`Otros: ${deal.otroRamo}`:deal.ramo||"—"],
+            ["Tiempo Total",    <span style={{fontWeight:700}}>{tot}</span>],
+            ["Tiempo en Etapa", <span style={{color:stage.color,fontWeight:700}}>{tis()}</span>],
+            ["Revisitas",       <span style={{color:C.gray600,fontWeight:700}}>{Object.values(deal.stageCounts||{}).filter(v=>v>1).length} etapas</span>],
+          ].map(([l,v],i)=><div key={i} className="ibox"><div className="ilbl">{l}</div><div className="ival">{v}</div></div>)}
+        </div>
+
+        {/* Cambio rápido área */}
+        {deal.stage==="otras_areas"&&(
+          <div className="area-quick" style={{marginBottom:11}}>
+            <span style={{fontSize:10,fontWeight:700,color:C.gray600,flexShrink:0}}>Área:</span>
+            {SUBAREAS.map(sa=>(
+              <div key={sa.id} className={`area-chip ${deal.subArea===sa.id?"cur":""}`} onClick={()=>onMove(deal.id,"otras_areas",sa.id)}>{sa.icon} {sa.label}</div>
+            ))}
+          </div>
+        )}
+
+        {/* Historial */}
+        <div style={{fontSize:10,fontWeight:700,color:C.gray500,textTransform:"uppercase",letterSpacing:".6px",marginBottom:8}}>Historial</div>
+        <div style={{marginBottom:13}}>
+          {deal.history.map((h,i)=>{
+            const hs=gS(h.stage),sa=h.subArea?gSA(h.subArea):null;
+            const nxt=deal.history[i+1],dur=nxt?nxt.enteredAt-h.enteredAt:Date.now()-h.enteredAt;
+            const last=i===deal.history.length-1;
+            return (
+              <div key={i} className="tli">
+                {!last&&<div className="tlln"/>}
+                <div className="tldt" style={{"--tc":hs.color,background:hs.color}}/>
+                <div style={{flex:1}}>
+                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                    <span style={{fontSize:11,fontWeight:700,color:hs.color}}>{hs.label}{sa?` · ${sa.label}`:""}</span>
+                    <span style={{fontSize:10,padding:"1px 7px",borderRadius:99,background:hs.bg,color:hs.color,fontWeight:700}}>{fmtDur(dur)}</span>
+                  </div>
+                  <div style={{fontSize:9,color:C.gray400,marginTop:1}}>{fmtDT(h.enteredAt)}</div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Comentarios */}
+        <div className="cm-box">
+          <div className="cm-title">💬 Comentarios ({(deal.comments||[]).length})</div>
+          {(deal.comments||[]).length>0&&(
+            <div className="cm-list">
+              {(deal.comments||[]).map(c=>{const u=gU(c.userId);return(
+                <div key={c.id} className="cm">
+                  <div className="cm-av" style={{background:u.role==="admin"?C.black:C.red}}>
+                    {u.photo?<img src={u.photo} alt="" style={{width:"100%",height:"100%",objectFit:"cover",borderRadius:"50%"}}/>:u.initials}
+                  </div>
+                  <div className="cm-body">
+                    <div className="cm-meta"><span className="cm-name">{u.name}</span><span>{fmtDT(c.ts)}</span></div>
+                    <div className="cm-text">{c.text}</div>
+                  </div>
+                </div>
+              );})}
+            </div>
+          )}
+          <div style={{display:"flex",gap:7}}>
+            <textarea className="cm-input" rows={2} placeholder="Agregar comentario… (Ctrl+Enter)" value={newCmt} onChange={e=>setNewCmt(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&e.ctrlKey){onAddComment(deal.id,{id:Date.now(),userId:currentUser.id,text:newCmt.trim(),ts:Date.now()});setNewCmt("");}}}/>
+            <button className="btn br" style={{alignSelf:"flex-end",padding:"8px 12px"}} onClick={()=>{if(!newCmt.trim())return;onAddComment(deal.id,{id:Date.now(),userId:currentUser.id,text:newCmt.trim(),ts:Date.now()});setNewCmt("");}}>✈</button>
+          </div>
+        </div>
+
+        <div style={{borderTop:`1px solid ${C.border}`,paddingTop:12,marginTop:14,display:"flex",justifyContent:"space-between"}}>
+          <button className="btn bd" onClick={()=>{onDelete(deal.id);onClose();}}>🗑 Eliminar</button>
+          <button className="btn bg" onClick={onClose}>Cerrar</button>
+        </div>
+      </div>
+    </div>
+    {showMove&&<MoveModal deal={deal} onMove={onMove} onClose={()=>setShowMove(false)}/>}
+    {showSub&&<SubAreaPicker current={deal.subArea} onSelect={sub=>{onMove(deal.id,"otras_areas",sub);setShowSub(false);}} onClose={()=>setShowSub(false)}/>}
+    {showStatus&&<StatusModal deal={deal} onSave={onStatusChange} onClose={()=>setShowStatus(false)}/>}
+    </>
+  );
+}
+
+// ══════════════════════════════════════════════════════
+// PIPELINE BOARD
+// ══════════════════════════════════════════════════════
+function PipelineBoard({deals, onMove, onSelect, onAdd}) {
+  const [dragging,setDragging]=useState(null);
+  const [dragOver,setDragOver]=useState(null);
+  const [subPick,setSubPick]=useState(null);
+  const dragItem=useRef(null);
+
+  const drop=sid=>{
+    if(!dragItem.current||dragItem.current.stage===sid){setDragging(null);setDragOver(null);return;}
+    const s=STAGES.find(x=>x.id===sid);
+    if(s?.sub) setSubPick({dealId:dragItem.current.id});
+    else onMove(dragItem.current.id,sid,null);
+    setDragging(null);setDragOver(null);dragItem.current=null;
+  };
+
+  // Only show active deals (no perdidas, no cierre — cierre goes to its own section)
+  const activeDeals = deals.filter(d=>d.status!=="perdida"&&d.stage!=="cierre");
+
+  return (
+    <>
+    <div className="pipe">
+      {STAGES.map(stage=>{
+        const sd=activeDeals.filter(d=>d.stage===stage.id);
+        const sv=sd.reduce((a,d)=>a+(parseInt(d.monto||0)),0);
+        return (
+          <div key={stage.id} className={`scol ${dragOver===stage.id?"dov":""}`}
+            onDragOver={e=>{e.preventDefault();setDragOver(stage.id);}}
+            onDragLeave={e=>{if(!e.currentTarget.contains(e.relatedTarget))setDragOver(null);}}
+            onDrop={()=>drop(stage.id)}>
+            <div className="scol-head">
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                <div style={{display:"flex",alignItems:"center",gap:6}}>
+                  <div className="sdot" style={{background:stage.color}}/>
+                  <span className="sname">{stage.label}</span>
+                </div>
+                <span className="scnt" style={{background:`${stage.color}20`,color:stage.color}}>{sd.length}</span>
+              </div>
+              {sv>0&&<div className="smonto">{fmtQ(sv)}</div>}
+            </div>
+            <div className="scol-body">
+              {sd.map(deal=>{
+                const sa=deal.subArea?gSA(deal.subArea):null;
+                const st=gST(deal.status)||STATUS_OPTS[0];
+                const cmtCnt=(deal.comments||[]).length;
+                return (
+                  <div key={deal.id} className={`dc ${dragging===deal.id?"drag":""}`}
+                    style={{"--sc":st.color}}
+                    draggable onDragStart={()=>{setDragging(deal.id);dragItem.current=deal;}}
+                    onDragEnd={()=>{setDragging(null);setDragOver(null);dragItem.current=null;}}
+                    onClick={()=>onSelect(deal)}>
+                    <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:6}}>
+                      <div className="dcav" style={{background:`${stage.color}18`,color:stage.color,border:`1px solid ${stage.color}25`}}>{ini(deal.cliente)}</div>
+                      {deal.monto&&<span className="dcmn">{fmtQ(deal.monto)}</span>}
+                    </div>
+                    <div className="dcnm">{deal.cliente}</div>
+                    {deal.ramo&&<div className="dcrm">{deal.ramo==="Otros"?`Otros: ${deal.otroRamo}`:deal.ramo}</div>}
+                    {sa&&<div className="dcsb">{sa.icon} {sa.label}</div>}
+                    <div className="dcft">
+                      <span className="st-pill" style={{background:st.bg,color:st.color,border:`1px solid ${st.color}30`}}>{st.icon} {st.label}</span>
+                      <div style={{display:"flex",gap:4}}>
+                        {cmtCnt>0&&<span className="cmb">💬{cmtCnt}</span>}
+                        {Object.values(deal.stageCounts||{}).some(v=>v>1)&&<span className="cmb">⟳</span>}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+              {sd.length===0&&<div className="empty">Arrastra aquí</div>}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+    <button className="fab" onClick={onAdd} title="Nuevo negocio">+</button>
+    {subPick&&<SubAreaPicker current={null} onSelect={sub=>{onMove(subPick.dealId,"otras_areas",sub);setSubPick(null);}} onClose={()=>setSubPick(null)}/>}
+    </>
+  );
+}
+
+// ══════════════════════════════════════════════════════
+// PROSPECCION (perdidas agrupadas por mes)
+// ══════════════════════════════════════════════════════
+function Prospeccion({deals, onSelect}) {
+  const perdidas = deals.filter(d=>d.status==="perdida");
+  const byMonth = useMemo(()=>{
+    const map={};
+    perdidas.forEach(d=>{
+      const k=monthKey(d.fechaInicio);
+      if(!map[k]) map[k]=[];
+      map[k].push(d);
+    });
+    return Object.entries(map).sort((a,b)=>b[0].localeCompare(a[0]));
+  },[perdidas]);
+
+  if(!perdidas.length) return (
+    <div className="pros">
+      <div style={{textAlign:"center",padding:"60px 20px",color:C.gray400}}>
+        <div style={{fontSize:32,marginBottom:12}}>✓</div>
+        <div style={{fontSize:16,fontWeight:700,color:C.gray600}}>Sin oportunidades perdidas</div>
+        <div style={{fontSize:12,marginTop:6}}>Las oportunidades marcadas como "Perdida" aparecerán aquí agrupadas por mes.</div>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="pros">
+      <div className="pros-header">
+        <div>
+          <div style={{fontFamily:"Montserrat,sans-serif",fontWeight:800,fontSize:16,color:C.black}}>Prospección</div>
+          <div style={{fontSize:12,color:C.gray400,marginTop:2}}>Oportunidades perdidas agrupadas por mes — para re-cotizar el próximo año</div>
+        </div>
+        <div style={{padding:"5px 12px",background:C.redBg,border:`1px solid rgba(200,16,46,.2)`,borderRadius:7,fontSize:12,fontWeight:700,color:C.red}}>{perdidas.length} registros</div>
+      </div>
+      <div className="pros-months">
+        {byMonth.map(([k,ds])=>(
+          <div key={k} className="pros-month">
+            <div className="pros-month-head">
+              <div>
+                <div className="pros-month-title">{monthLabel(k)}</div>
+                <div className="pros-month-sub">Re-cotizar en {monthLabel(k.replace(/^\d{4}/,String(parseInt(k.slice(0,4))+1)))}</div>
+              </div>
+              <div style={{textAlign:"right"}}>
+                <div style={{fontSize:13,fontWeight:700,color:C.black}}>{ds.length} oportunidades</div>
+                <div style={{fontSize:11,color:C.gray400}}>Q {ds.reduce((a,d)=>a+(parseInt(d.monto||0)),0).toLocaleString("es-GT")}</div>
+              </div>
+            </div>
+            <div className="pros-grid">
+              {ds.map(d=>{
+                const razones=d.razonesP?.map(id=>RAZONES_PERDIDA.find(r=>r.id===id)?.label).filter(Boolean)||[];
+                return (
+                  <div key={d.id} className="pros-card" onClick={()=>onSelect(d)} style={{cursor:"pointer"}}>
+                    <div className="pros-card-lbl">✕ Perdida</div>
+                    <div style={{fontWeight:700,fontSize:13,color:C.black,marginBottom:3}}>{d.cliente}</div>
+                    {d.monto&&<div style={{fontSize:11,fontWeight:700,color:C.green,marginBottom:3}}>{fmtQ(d.monto)}</div>}
+                    {d.ramo&&<div style={{fontSize:10,color:C.gray500,marginBottom:5}}>{d.ramo}</div>}
+                    {razones.length>0&&(
+                      <div style={{display:"flex",flexWrap:"wrap",gap:3}}>
+                        {razones.map((r,i)=><span key={i} style={{padding:"1px 6px",background:C.redBg,borderRadius:99,fontSize:9,color:C.red,border:`1px solid rgba(200,16,46,.2)`,fontWeight:600}}>{r}</span>)}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════
+// CIERRE / LANZAMIENTO (negocios ganados en ejecución)
+// ══════════════════════════════════════════════════════
+function CierreLanzamiento({deals, onSelect}) {
+  const cierres = deals.filter(d=>d.stage==="cierre");
+  const byMonth = useMemo(()=>{
+    const map={};
+    cierres.forEach(d=>{
+      const k=monthKey(d.fechaInicio);
+      if(!map[k]) map[k]=[];
+      map[k].push(d);
+    });
+    return Object.entries(map).sort((a,b)=>b[0].localeCompare(a[0]));
+  },[cierres]);
+
+  const totalMonto=cierres.reduce((a,d)=>a+(parseInt(d.monto||0)),0);
+
+  if(!cierres.length) return (
+    <div className="pros">
+      <div style={{textAlign:"center",padding:"60px 20px",color:C.gray400}}>
+        <div style={{fontSize:32,marginBottom:12}}>★</div>
+        <div style={{fontSize:16,fontWeight:700,color:C.gray600}}>Sin negocios en Cierre / Lanzamiento</div>
+        <div style={{fontSize:12,marginTop:6}}>Los negocios movidos a "Cierre / Lanzamiento" desde el pipeline aparecerán aquí agrupados por mes.</div>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="pros">
+      <div className="pros-header">
+        <div>
+          <div style={{fontFamily:"Montserrat,sans-serif",fontWeight:800,fontSize:16,color:C.black}}>Cierre / Lanzamiento</div>
+          <div style={{fontSize:12,color:C.gray400,marginTop:2}}>Negocios que superaron el pipeline y están en ejecución — agrupados por mes</div>
+        </div>
+        <div style={{display:"flex",gap:8}}>
+          <div style={{padding:"5px 12px",background:C.greenBg,border:`1px solid ${C.green}40`,borderRadius:7,fontSize:12,fontWeight:700,color:C.green}}>{cierres.length} negocios</div>
+          <div style={{padding:"5px 12px",background:C.gray50,border:`1px solid ${C.border}`,borderRadius:7,fontSize:12,fontWeight:700,color:C.black}}>{fmtQ(totalMonto)}</div>
+        </div>
+      </div>
+      <div className="pros-months">
+        {byMonth.map(([k,ds])=>{
+          const mesTotal=ds.reduce((a,d)=>a+(parseInt(d.monto||0)),0);
+          return (
+            <div key={k} className="pros-month">
+              <div className="pros-month-head">
+                <div>
+                  <div className="pros-month-title" style={{color:C.green}}>★ {monthLabel(k)}</div>
+                  <div className="pros-month-sub">Lanzados este mes</div>
+                </div>
+                <div style={{textAlign:"right"}}>
+                  <div style={{fontSize:13,fontWeight:700,color:C.black}}>{ds.length} {ds.length===1?"negocio":"negocios"}</div>
+                  <div style={{fontSize:11,fontWeight:700,color:C.green}}>{fmtQ(mesTotal)}</div>
+                </div>
+              </div>
+              <div className="pros-grid">
+                {ds.map(d=>{
+                  const st=gST(d.status)||STATUS_OPTS[0];
+                  return (
+                    <div key={d.id} className="pros-card" style={{borderLeftColor:C.green,cursor:"pointer"}} onClick={()=>onSelect(d)}>
+                      <div className="pros-card-lbl" style={{background:C.greenBg,color:C.green,border:`1px solid ${C.green}30`}}>★ Cierre / Lanzamiento</div>
+                      <div style={{fontWeight:700,fontSize:13,color:C.black,marginBottom:3}}>{d.cliente}</div>
+                      {d.monto&&<div style={{fontSize:12,fontWeight:800,color:C.green,marginBottom:3}}>{fmtQ(d.monto)}</div>}
+                      {d.ramo&&<div style={{fontSize:10,color:C.gray500,marginBottom:5}}>{d.ramo==="Otros"?`Otros: ${d.otroRamo}`:d.ramo}</div>}
+                      {d.asegurados&&<div style={{fontSize:10,color:C.gray400}}>{d.asegurados} asegurados</div>}
+                      <div style={{marginTop:6}}>
+                        <span style={{padding:"2px 8px",borderRadius:99,background:st.bg,color:st.color,fontSize:9,fontWeight:700,border:`1px solid ${st.color}25`}}>{st.icon} {st.label}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+
+function Dashboard({deals}) {
+  const [filter, setFilter]=useState({type:null,value:null});
+  const [dateFrom,setDateFrom]=useState("");
+  const [dateTo,setDateTo]=useState("");
+
+  const [clienteQ,setClienteQ]=useState("");
+  const [clienteSel,setClienteSel]=useState(null);
+
+  const toggleFilter=(type,value)=>setFilter(f=>(f.type===type&&f.value===value)?{type:null,value:null}:{type,value});
+
+  // ALL useMemo hooks together at the top — never break hook order
+  const clienteFiltered=useMemo(()=>clienteSel?deals.filter(d=>d.id===clienteSel):deals,[deals,clienteSel]);
+
+  const dateFiltered=useMemo(()=>clienteFiltered.filter(d=>{
+    const fd=d.fechaInicio;
+    if(dateFrom&&fd<dateFrom)return false;
+    if(dateTo&&fd>dateTo)return false;
+    return true;
+  }),[clienteFiltered,dateFrom,dateTo]);
+
+  const filtered=useMemo(()=>{
+    if(!filter.type)return dateFiltered;
+    if(filter.type==="stage") return dateFiltered.filter(d=>d.stage===filter.value);
+    if(filter.type==="ramo")  return dateFiltered.filter(d=>d.ramo===filter.value);
+    if(filter.type==="status")return dateFiltered.filter(d=>d.status===filter.value);
+    if(filter.type==="mes")   return dateFiltered.filter(d=>monthKey(d.fechaInicio)===filter.value);
+    if(filter.type==="area")  return dateFiltered.filter(d=>d.history.some(h=>h.stage==="otras_areas"&&h.subArea===filter.value));
+    if(filter.type==="razon") return dateFiltered.filter(d=>d.razonesP?.includes(filter.value));
+    return dateFiltered;
+  },[dateFiltered,filter]);
+
+  const timeSeries=useMemo(()=>{
+    const map={};
+    dateFiltered.forEach(d=>{const k=monthKey(d.fechaInicio);if(!map[k])map[k]={count:0,monto:0};map[k].count++;map[k].monto+=parseInt(d.monto||0);});
+    return Object.entries(map).sort((a,b)=>a[0].localeCompare(b[0])).map(([k,v])=>({label:monthLabel(k),key:k,count:v.count,monto:v.monto}));
+  },[dateFiltered]);
+
+  // Regular derived data — no hooks below this line
+  const ganadas=filtered.filter(d=>d.status==="ganada");
+  const perdidas=filtered.filter(d=>d.status==="perdida");
+  const negoc=filtered.filter(d=>d.status==="negociacion");
+  const pipelineVal=negoc.reduce((a,d)=>a+(parseInt(d.monto||0)),0);
+  const ganadoVal=ganadas.reduce((a,d)=>a+(parseInt(d.monto||0)),0);
+  const winRate=filtered.length?Math.round(ganadas.length/filtered.length*100):0;
+
+  const byStage=STAGES_ALL.map((s,i)=>({
+    id:s.id, name:s.label,
+    value:filtered.filter(d=>d.stage===s.id).length,
+    monto:filtered.filter(d=>d.stage===s.id).reduce((a,d)=>a+(parseInt(d.monto||0)),0),
+    color:s.id==="cierre"?C.green:[C.gray800,C.gray700,C.gray600,C.gray500][i]||C.gray500,
+  }));
+
+  const byRamo=RAMOS.map((r,i)=>({
+    name:r,
+    count:filtered.filter(d=>d.ramo===r).length,
+    monto:filtered.filter(d=>d.ramo===r).reduce((a,d)=>a+(parseInt(d.monto||0)),0),
+    color:i%2===0?C.gray700:C.red,
+  })).filter(x=>x.count>0);
+
+  const avgTimeStage=STAGES_ALL.map((s,i)=>{
+    const sd=deals.filter(d=>d.history.some(h=>h.stage===s.id));
+    if(!sd.length)return{id:s.id,name:s.label,value:0,color:s.id==="cierre"?C.green:[C.gray800,C.gray700,C.gray600,C.gray500][i]||C.gray500};
+    const times=sd.map(d=>{let t=0;d.history.forEach((h,j)=>{if(h.stage!==s.id)return;const nx=d.history[j+1];t+=(nx?nx.enteredAt:Date.now())-h.enteredAt;});return t;});
+    return{id:s.id,name:s.label,value:+(times.reduce((a,b)=>a+b,0)/times.length/864e5).toFixed(1),color:s.id==="cierre"?C.green:[C.gray800,C.gray700,C.gray600,C.gray500][i]||C.gray500};
+  });
+
+  const avgTimeArea=SUBAREAS.map((sa,i)=>{
+    const vs=[];
+    deals.forEach(d=>d.history.forEach((h,j)=>{if(h.stage==="otras_areas"&&h.subArea===sa.id){const nx=d.history[j+1];vs.push((nx?nx.enteredAt:Date.now())-h.enteredAt);}}));
+    if(!vs.length)return null;
+    return{id:sa.id,name:sa.label,value:+(vs.reduce((a,b)=>a+b,0)/vs.length/864e5).toFixed(1),color:i%2===0?C.gray700:C.red};
+  }).filter(Boolean);
+
+  const areaCombo=SUBAREAS.map(sa=>{
+    const visits=deals.reduce((a,d)=>a+d.history.filter(h=>h.stage==="otras_areas"&&h.subArea===sa.id).length,0);
+    const reprocesos=deals.reduce((a,d)=>{const c=d.history.filter(h=>h.stage==="otras_areas"&&h.subArea===sa.id).length;return a+(c>1?c-1:0);},0);
+    return{id:sa.id,name:sa.label,visits,reprocesos};
+  }).filter(x=>x.visits>0);
+
+  const byRazon=RAZONES_PERDIDA.map(r=>({
+    id:r.id,name:r.label,value:deals.filter(d=>d.razonesP?.includes(r.id)).length,color:C.red,
+  })).filter(x=>x.value>0);
+
+  const filterLabel=filter.type==="stage"?`Etapa: ${gS(filter.value).label}`
+    :filter.type==="ramo"?`Ramo: ${filter.value}`
+    :filter.type==="status"?`Estatus: ${gST(filter.value)?.label}`
+    :filter.type==="mes"?`Mes: ${monthLabel(filter.value)}`
+    :filter.type==="area"?`Área: ${gSA(filter.value)?.label||filter.value}`
+    :filter.type==="razon"?`Razón: ${RAZONES_PERDIDA.find(r=>r.id===filter.value)?.label}`
+    :null;
+
+  const kpis=[
+    {l:"Pipeline",       v:"Q"+pipelineVal.toLocaleString("es-GT"), s:`${negoc.length} en negociación`,  c:C.gray700},
+    {l:"Ganado",         v:"Q"+ganadoVal.toLocaleString("es-GT"),   s:`${ganadas.length} cierres`,        c:C.green},
+    {l:"Tasa de Cierre", v:winRate+"%",  s:`${ganadas.length} de ${filtered.length}`,                    c:C.gray600},
+    {l:"Perdidos",       v:perdidas.length, s:`Q${perdidas.reduce((a,d)=>a+(parseInt(d.monto||0)),0).toLocaleString("es-GT")}`, c:C.red},
+    {l:"Total",          v:filtered.length, s:"registros en filtro",                                     c:C.gray500},
+    {l:"Otras Áreas",    v:filtered.filter(d=>d.stage==="otras_areas").length, s:"proceso interno",      c:C.gray400},
+  ];
+
+  const actI=filter.type==="stage"?byStage.findIndex(b=>b.id===filter.value):null;
+  const ramoI=filter.type==="ramo"?byRamo.findIndex(d=>d.name===filter.value):null;
+  const mesI=filter.type==="mes"?timeSeries.findIndex(d=>d.key===filter.value):null;
+  const areaI=filter.type==="area"?areaCombo.findIndex(d=>d.id===filter.value):null;
+  const areaTimeI=filter.type==="area"?avgTimeArea.findIndex(d=>d.id===filter.value):null;
+  const razonI=filter.type==="razon"?byRazon.findIndex(d=>d.id===filter.value):null;
+  const statusI=filter.type==="status"?STATUS_OPTS.findIndex(s=>s.id===filter.value):null;
+
+  return (
+    <div className="dash">
+      {/* FILTRO FECHA + CLIENTE */}
+      <div className="cc" style={{padding:"13px 18px"}}>
+        <div style={{display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+          <span style={{fontSize:11,fontWeight:700,color:C.gray600,textTransform:"uppercase",letterSpacing:".5px"}}>Filtros</span>
+          <div className="dfilt">
+            <span className="dfilt-lbl">Desde</span>
+            <input type="date" className="dfilt-inp" value={dateFrom} onChange={e=>setDateFrom(e.target.value)}/>
+            <span className="dfilt-lbl">Hasta</span>
+            <input type="date" className="dfilt-inp" value={dateTo} onChange={e=>setDateTo(e.target.value)}/>
+          </div>
+          {(dateFrom||dateTo)&&<button className="btn bg" style={{fontSize:11,padding:"4px 10px"}} onClick={()=>{setDateFrom("");setDateTo("");}}>✕ Fechas</button>}
+          {/* Buscador de cliente */}
+          <div style={{position:"relative",display:"flex",alignItems:"center"}}>
+            <span className="dfilt-lbl">Cliente</span>
+            <div style={{position:"relative"}}>
+              <input
+                className="dfilt-inp"
+                style={{width:180,paddingRight:clienteSel?22:8}}
+                placeholder="Buscar cliente…"
+                value={clienteSel?deals.find(d=>d.id===clienteSel)?.cliente||"":clienteQ}
+                onChange={e=>{setClienteQ(e.target.value);setClienteSel(null);}}
+                onFocus={e=>{if(clienteSel){setClienteQ("");setClienteSel(null);}}}
+              />
+              {clienteSel&&<button onClick={()=>{setClienteSel(null);setClienteQ("");}} style={{position:"absolute",right:4,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",fontSize:12,color:C.gray500,padding:0,lineHeight:1}}>✕</button>}
+              {/* Dropdown sugerencias */}
+              {!clienteSel&&clienteQ.length>0&&(()=>{
+                const opts=deals.filter(d=>d.cliente.toLowerCase().includes(clienteQ.toLowerCase())).slice(0,8);
+                if(!opts.length) return null;
+                return <div style={{position:"absolute",top:"calc(100% + 3px)",left:0,right:0,background:"#fff",border:`1px solid ${C.border}`,borderRadius:6,boxShadow:"0 4px 16px rgba(0,0,0,.12)",zIndex:200,maxHeight:220,overflowY:"auto"}}>
+                  {opts.map(d=>(
+                    <div key={d.id} onClick={()=>{setClienteSel(d.id);setClienteQ("");}}
+                      style={{padding:"8px 12px",cursor:"pointer",fontSize:12,color:C.black,borderBottom:`1px solid ${C.gray100}`,display:"flex",alignItems:"center",gap:8}}
+                      onMouseOver={e=>e.currentTarget.style.background=C.redBg}
+                      onMouseOut={e=>e.currentTarget.style.background="#fff"}>
+                      <span style={{fontWeight:600}}>{d.cliente}</span>
+                      <span style={{fontSize:10,color:C.gray400,marginLeft:"auto"}}>{d.ramo}</span>
+                    </div>
+                  ))}
+                </div>;
+              })()}
+            </div>
+          </div>
+          <span style={{fontSize:11,color:C.gray400}}>{filtered.length} registros</span>
+        </div>
+      </div>
+
+      {(filterLabel||clienteSel)&&<div className="filt-bar">
+        {clienteSel&&<span style={{background:C.redBg,color:C.red,border:`1px solid ${C.red}22`,borderRadius:4,padding:"2px 8px",fontSize:11,fontWeight:600}}>👤 {deals.find(d=>d.id===clienteSel)?.cliente}</span>}
+        {filterLabel&&<span>🔍 {filterLabel}</span>}
+        <button className="btn bg" style={{marginLeft:"auto",fontSize:11,padding:"3px 9px"}} onClick={()=>{setFilter({type:null,value:null});setClienteSel(null);setClienteQ("");}}>✕ Limpiar todo</button>
+      </div>}
+
+      {/* KPIs */}
+      <div className="ds-section">
+        <div className="ds-sec-title">Resumen Ejecutivo</div>
+        <div className="krow">
+          {kpis.map((k,i)=>(
+            <div key={i} className="kpi">
+              <div className="kpi-top"><div className="klbl">{k.l}</div><div className="kpi-dot" style={{background:k.c}}/></div>
+              <div className="kval">{k.v}</div><div className="ksub">{k.s}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* TENDENCIA */}
+      <div className="ds-section">
+        <div className="ds-sec-title">Tendencia por Período — clic en mes para filtrar</div>
+        <div className="cc" style={{outline:filter.type==="mes"?`2px solid ${C.red}`:undefined}}>
+          <div className="cct">Oportunidades y Monto por Mes</div>
+          <div className="ccs">Barras = cantidad · Línea roja = monto acumulado · Clic en barra para filtrar todo el dashboard</div>
+          {timeSeries.length>0
+            ?<TimeLineChart data={timeSeries} height={240} activeIndex={mesI}
+                onBarClick={i=>toggleFilter("mes",timeSeries[i].key)}/>
+            :<div style={{padding:"30px 0",textAlign:"center",color:C.gray300,fontSize:12}}>Sin datos en el rango seleccionado.</div>}
+        </div>
+      </div>
+
+      {/* POR ETAPA */}
+      <div className="ds-section">
+        <div className="ds-sec-title">Distribución del Pipeline — clic para filtrar</div>
+        <div className="d2">
+          <div className="cc" style={{outline:filter.type==="stage"?`2px solid ${C.red}`:undefined}}>
+            <div className="cct">Negocios por Etapa</div>
+            <div className="ccs">Cantidad de oportunidades en cada fase · Clic para filtrar</div>
+            <BarChart data={byStage} valueKey="value" labelKey="name" colorKey="color" height={220}
+              tipFn={d=>[d.name,`${d.value} negocios`,`Q${(d.monto||0).toLocaleString("es-GT")}`]}
+              activeIndex={actI} onBarClick={i=>toggleFilter("stage",byStage[i].id)}/>
+          </div>
+          <div className="cc" style={{outline:filter.type==="stage"?`2px solid ${C.red}`:undefined}}>
+            <div className="cct">Monto por Etapa (Q)</div>
+            <div className="ccs">Valor económico total en cada fase · Clic para filtrar</div>
+            <BarChart data={byStage} valueKey="monto" labelKey="name" colorKey="color" height={220}
+              formatVal={v=>v>=1e6?`${(v/1e6).toFixed(1)}M`:v>=1000?`${(v/1000).toFixed(0)}K`:String(v)}
+              tipFn={d=>[d.name,`Q${(d.monto||0).toLocaleString("es-GT")}`,`${d.value} negocios`]}
+              activeIndex={actI} onBarClick={i=>toggleFilter("stage",byStage[i].id)}/>
+          </div>
+        </div>
+      </div>
+
+      {/* POR RAMO */}
+      <div className="ds-section">
+        <div className="ds-sec-title">Análisis por Ramo — clic para filtrar</div>
+        <div className="cc" style={{outline:filter.type==="ramo"?`2px solid ${C.red}`:undefined}}>
+          <div className="cct">Cantidad y Monto por Ramo</div>
+          <div className="ccs">Barras = oportunidades · Línea roja = monto (Q) · Clic para filtrar</div>
+          {byRamo.length>0
+            ?<RamoComboChart data={byRamo} height={260} activeIndex={ramoI}
+                onBarClick={i=>toggleFilter("ramo",byRamo[i].name)}/>
+            :<div style={{padding:"30px 0",textAlign:"center",color:C.gray300,fontSize:12}}>Sin datos de ramo registrados.</div>}
+        </div>
+      </div>
+
+      {/* ANÁLISIS DE TIEMPO */}
+      <div className="ds-section">
+        <div className="ds-sec-title">Análisis de Tiempo</div>
+        <div className="d2">
+          <div className="cc" style={{outline:filter.type==="stage"?`2px solid ${C.red}`:undefined}}>
+            <div className="cct">Tiempo Promedio por Etapa (días)</div>
+            <div className="ccs">Días promedio en cada fase · Clic para filtrar</div>
+            <BarChart data={avgTimeStage} valueKey="value" labelKey="name" colorKey="color" height={220}
+              formatVal={v=>`${v}d`} tipFn={d=>[d.name,`Promedio: ${d.value} días`]}
+              activeIndex={actI} onBarClick={i=>avgTimeStage[i]?.id&&toggleFilter("stage",avgTimeStage[i].id)}/>
+          </div>
+          <div className="cc" style={{outline:filter.type==="area"?`2px solid ${C.red}`:undefined}}>
+            <div className="cct">Tiempo Promedio por Área Interna (días)</div>
+            <div className="ccs">Días promedio en cada sub-área · Clic para filtrar</div>
+            {avgTimeArea.length>0
+              ?<HBarChart data={avgTimeArea} color={C.gray600} activeIndex={areaTimeI}
+                  onBarClick={i=>avgTimeArea[i]?.id&&toggleFilter("area",avgTimeArea[i].id)}/>
+              :<div style={{padding:"30px 0",textAlign:"center",color:C.gray300,fontSize:12}}>Sin datos de áreas internas aún.</div>}
+          </div>
+        </div>
+      </div>
+
+      {/* ÁREAS INTERNAS */}
+      <div className="ds-section">
+        <div className="ds-sec-title">Actividad en Áreas Internas — clic para filtrar</div>
+        <div className="cc" style={{outline:filter.type==="area"?`2px solid ${C.red}`:undefined}}>
+          <div className="cct">Tránsito y Reprocesos por Área Interna</div>
+          <div className="ccs">Gris = tránsitos totales · Rojo = reprocesos · Clic para filtrar todo el dashboard</div>
+          {areaCombo.length>0
+            ?<AreaComboChart data={areaCombo} height={250} activeIndex={areaI}
+                onBarClick={i=>areaCombo[i]?.id&&toggleFilter("area",areaCombo[i].id)}/>
+            :<div style={{padding:"30px 0",textAlign:"center",color:C.gray300,fontSize:12}}>Sin actividad en áreas internas.</div>}
+        </div>
+      </div>
+
+      {/* PÉRDIDAS */}
+      {byRazon.length>0&&(
+        <div className="ds-section">
+          <div className="ds-sec-title">Análisis de Pérdidas — clic para filtrar</div>
+          <div className="d2">
+            <div className="cc" style={{outline:filter.type==="razon"?`2px solid ${C.red}`:undefined}}>
+              <div className="cct">Razones de Pérdida</div>
+              <div className="ccs">Oportunidades perdidas por razón · Clic para filtrar</div>
+              <BarChart data={byRazon} valueKey="value" labelKey="name" colorKey="color" height={210}
+                tipFn={d=>[d.name,`${d.value} oportunidades`]}
+                activeIndex={razonI} onBarClick={i=>byRazon[i]?.id&&toggleFilter("razon",byRazon[i].id)}/>
+            </div>
+            <div className="cc" style={{outline:filter.type==="status"?`2px solid ${C.red}`:undefined}}>
+              <div className="cct">Estatus de Oportunidades</div>
+              <div className="ccs">Distribución por estatus · Clic para filtrar</div>
+              <BarChart
+                data={STATUS_OPTS.map((s,i)=>({id:s.id,name:s.label,value:filtered.filter(d=>d.status===s.id).length,color:i===0?C.gray600:i===1?C.green:C.red}))}
+                valueKey="value" labelKey="name" colorKey="color" height={210}
+                tipFn={d=>[d.name,`${d.value} oportunidades`]}
+                activeIndex={statusI} onBarClick={i=>toggleFilter("status",STATUS_OPTS[i].id)}/>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* TIEMPO INDIVIDUAL */}
+      <div className="ds-section">
+        <div className="ds-sec-title">Detalle Individual</div>
+        <div className="cc">
+          <div className="cct">Tiempo por Negocio en Cada Etapa</div>
+          <div className="ccs">Desglose individual del tiempo en cada fase — colores: verde=cierre, rojo=perdida, grises=activos</div>
+          <div style={{overflowX:"auto"}}>
+            <table className="tt">
+              <thead><tr>
+                <th>Cliente</th><th>Ramo</th><th>Estatus</th>
+                {STAGES_ALL.map(s=><th key={s.id} style={{color:s.color}}>{s.label}</th>)}
+                <th>Total</th>
+              </tr></thead>
+              <tbody>
+                {filtered.map(d=>{
+                  const st2=gST(d.status)||STATUS_OPTS[0];
+                  const stMap={};
+                  d.history.forEach((h,i)=>{const nx=d.history[i+1];stMap[h.stage]=(stMap[h.stage]||0)+(nx?nx.enteredAt-h.enteredAt:Date.now()-h.enteredAt);});
+                  const tot=Object.values(stMap).reduce((a,b)=>a+b,0);
+                  const rowColor=d.status==="ganada"?C.green:d.status==="perdida"?C.red:C.black;
+                  return (
+                    <tr key={d.id}>
+                      <td style={{color:rowColor}}>{d.cliente}</td>
+                      <td style={{fontSize:10}}>{d.ramo||"—"}</td>
+                      <td><span style={{padding:"1px 7px",borderRadius:99,background:st2.bg,color:st2.color,fontSize:9,fontWeight:700,border:`1px solid ${st2.color}30`}}>{st2.label}</span></td>
+                      {STAGES_ALL.map(s=><td key={s.id} style={{color:stMap[s.id]?s.color:C.gray300,fontWeight:stMap[s.id]?700:400}}>{stMap[s.id]?fmtDur(stMap[s.id]):"—"}</td>)}
+                      <td style={{fontWeight:700,color:rowColor}}>{fmtDur(tot)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════
+// APP ROOT
+// ══════════════════════════════════════════════════════
+let USERS = Object.values(EMAIL_MAP); // compatibilidad con referencias legacy
+
+function App() {
+  const [user,setUser]       = useState(null);
+  const [users,setUsers]     = useState(Object.values(EMAIL_MAP));
+  const [deals,setDeals]     = useState([]);
+  const [loading,setLoad]    = useState(true);
+  const [syncing,setSyncing] = useState(false);
+  const [syncMsg,setSyncMsg] = useState("");
+  const [view,setView]       = useState("pipeline");
+  const [sel,setSel]         = useState(null);
+  const [editing,setEditing] = useState(null);
+  const [showForm,setSF]     = useState(false);
+  const [showProf,setProf]   = useState(false);
+  const [saved,setSaved]     = useState("");
+
+  // Cargar deals desde Supabase
+  const loadDeals = async () => {
+    setSyncing(true);
+    const {data, error} = await supa.from("deals").select("*").order("created_at", {ascending:false});
+    if(!error && data) setDeals(data.map(dbToDeal));
+    setSyncing(false);
+    setLoad(false);
+  };
+
+  useEffect(()=>{
+    injectCSS();
+    loadDeals();
+    // Sincronización en tiempo real — Supabase Realtime
+    const channel = supa.channel("deals-changes")
+      .on("postgres_changes", {event:"*", schema:"public", table:"deals"}, ()=>{ loadDeals(); })
+      .subscribe();
+    // Polling de respaldo cada 60 segundos
+    const interval = setInterval(()=>loadDeals(), 60000);
+    return ()=>{ supa.removeChannel(channel); clearInterval(interval); };
+  },[]);
+
+  // Guardar deal en Supabase
+  const upsertDeal = async (deal) => {
+    const row = dealToDB(deal);
+    const {error} = await supa.from("deals").upsert(row, {onConflict:"id"});
+    if(!error){ setSaved("✓ Guardado"); setTimeout(()=>setSaved(""),2000); }
+    else { setSaved("⚠ Error al guardar"); setTimeout(()=>setSaved(""),3000); }
+  };
+
+  // Eliminar deal en Supabase
+  const deleteDeal = async (id) => {
+    await supa.from("deals").delete().eq("id", id);
+  };
+
+  const saveUsers=us=>{ setUsers(us); USERS=us; };
+
+  const moveDeal=(id,sid,sub)=>{
+    const ts=Date.now();
+    const upd=d=>({...d,stage:sid,subArea:sub,history:[...d.history,{stage:sid,subArea:sub,enteredAt:ts}],stageCounts:{...d.stageCounts,[sid]:(d.stageCounts?.[sid]||0)+1}});
+    setDeals(prev=>prev.map(d=>d.id===id?upd(d):d));
+    setSel(prev=>prev?.id===id?upd(prev):prev);
+    const deal = deals.find(d=>d.id===id);
+    if(deal) upsertDeal(upd(deal));
+  };
+
+  const changeStatus=(id,status,razones)=>{
+    setDeals(prev=>prev.map(d=>d.id===id?{...d,status,razonesP:razones}:d));
+    setSel(prev=>prev?.id===id?{...prev,status,razonesP:razones}:prev);
+    const deal = deals.find(d=>d.id===id);
+    if(deal) upsertDeal({...deal,status,razonesP:razones});
+  };
+
+  const addComment=(dealId,cmt)=>{
+    setDeals(prev=>prev.map(d=>d.id===dealId?{...d,comments:[...(d.comments||[]),cmt]}:d));
+    setSel(prev=>prev?.id===dealId?{...prev,comments:[...(prev.comments||[]),cmt]}:prev);
+    const deal = deals.find(d=>d.id===dealId);
+    if(deal) upsertDeal({...deal,comments:[...(deal.comments||[]),cmt]});
+  };
+
+  const saveDeal=updated=>{
+    if(editing) setDeals(prev=>prev.map(d=>d.id===updated.id?{...d,...updated}:d));
+    else setDeals(prev=>[...prev,updated]);
+    setSel(prev=>prev?.id===updated.id?{...prev,...updated}:prev);
+    upsertDeal(updated);
+    setEditing(null); setSF(false);
+  };
+
+  const exportCSV=()=>{
+    const h=["ID","Cliente","Monto","Asegurados","Ramo","Fecha","Etapa","Área","Estatus","Razones Pérdida"];
+    const rows=deals.map(d=>[d.id,d.cliente,d.monto,d.asegurados,d.ramo,d.fechaInicio,gS(d.stage).label,d.subArea?gSA(d.subArea)?.label:"",gST(d.status)?.label||"",d.razonesP?.map(r=>RAZONES_PERDIDA.find(x=>x.id===r)?.label).join(" | ") || ""]);
+    const csv=[h,...rows].map(r=>r.map(c=>`"${String(c||"").replace(/"/g,'""')}"`).join(",")).join("\n");
+    const a=document.createElement("a"); a.href="data:text/csv;charset=utf-8,\uFEFF"+encodeURIComponent(csv);
+    a.download=`pipeline-ag-${todayISO()}.csv`; a.click();
+  };
+
+  if(!user) return <Login onLogin={u=>{setUser(u);}}/>;
+  if(loading) return <div style={{background:C.bg,minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:12,color:C.gray500}}>
+    <div style={{width:36,height:36,border:`3px solid ${C.red}`,borderTopColor:"transparent",borderRadius:"50%",animation:"spin 0.8s linear infinite"}}/>
+    <div style={{fontSize:13,fontWeight:600}}>Cargando datos…</div>
+    <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+  </div>;
+
+  const curUser = users.find(u=>u.id===user.id)||user;
+
+  const TABS=[{id:"pipeline",l:"Pipeline"},{id:"cierre",l:"Cierre / Lanzamiento"},{id:"prospeccion",l:"Prospección"},{id:"dashboard",l:"Dashboard"}];
+
+  return (
+    <div className="app">
+      {/* TOPBAR */}
+      <div className="tb">
+        <div style={{display:"flex",alignItems:"center",gap:14}}>
+          <img src="data:image/png;base64,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" alt="AG" style={{height:34,width:"auto",flexShrink:0}}/>
+          <div>
+            <div style={{fontFamily:"Montserrat,sans-serif",fontWeight:800,fontSize:12,color:"#fff",letterSpacing:".5px",lineHeight:1.1}}>ASEGURADORA GENERAL</div>
+            <div style={{fontFamily:"Montserrat,sans-serif",fontWeight:400,fontSize:9,color:"rgba(255,255,255,.5)",letterSpacing:"1.5px",textTransform:"uppercase"}}>Pipeline Comercial · Canales Alternos</div>
+          </div>
+          <div style={{width:1,height:28,background:"rgba(255,255,255,.2)",flexShrink:0}}/>
+          <div style={{fontFamily:"Montserrat,sans-serif",fontWeight:400,fontSize:9,color:"rgba(255,255,255,.45)",letterSpacing:"1.5px",textTransform:"uppercase"}}>Pipeline Comercial · Canales Alternos</div>
+        </div>
+        <div style={{display:"flex",gap:3}}>
+          {TABS.map(t=><button key={t.id} className={`navb ${view===t.id?"on":""}`} onClick={()=>setView(t.id)}>{t.l}</button>)}
+        </div>
+        <div style={{display:"flex",alignItems:"center",gap:7}}>
+          {saved&&<span style={{fontSize:11,color:saved.startsWith("⚠")?C.red:"#4ade80",fontWeight:700,marginLeft:4}}>{saved}</span>}
+          {syncing&&<span style={{fontSize:10,color:"rgba(255,255,255,.4)",marginLeft:4}}>↻</span>}
+          <div className="upill" onClick={()=>setProf(true)}>
+            <div className="uav" style={{background:curUser.role==="admin"?C.black:C.red}}>
+              {curUser.photo?<img src={curUser.photo} alt=""/>:curUser.initials}
+            </div>
+            <span style={{fontSize:11,color:"rgba(255,255,255,.75)",fontWeight:600}}>{curUser.name.split(" ")[0]}</span>
+          </div>
+          <button className="btn" style={{background:"rgba(255,255,255,.08)",color:"rgba(255,255,255,.6)",fontSize:11,padding:"4px 9px"}} onClick={()=>setUser(null)}>Salir</button>
+        </div>
+      </div>
+
+      {/* SUBBAR */}
+      <div className="sb">
+        <div style={{display:"flex",alignItems:"center",gap:8}}>
+          <span style={{fontSize:12,color:C.gray600}}>{deals.length} negocios</span>
+          <span style={{color:C.border}}>·</span>
+          <span style={{fontSize:11,color:C.green}}>{deals.filter(d=>d.stage==="cierre").length} en cierre</span>
+          <span style={{color:C.border}}>·</span>
+          <span style={{fontSize:11,color:C.green}}>{deals.filter(d=>d.status==="ganada").length} ganados</span>
+          <span style={{color:C.border}}>·</span>
+          <span style={{fontSize:11,color:C.red}}>{deals.filter(d=>d.status==="perdida").length} perdidos</span>
+        </div>
+        <button className="btn bg" style={{fontSize:11,padding:"3px 11px"}} onClick={exportCSV}>↓ CSV</button>
+      </div>
+
+      {/* CONTENIDO */}
+      <div style={{flex:1,overflow:"auto"}}>
+        {view==="pipeline"   &&<PipelineBoard deals={deals} onMove={moveDeal} onSelect={setSel} onAdd={()=>setSF(true)}/>}
+        {view==="cierre"     &&<CierreLanzamiento deals={deals} onSelect={setSel}/>}
+        {view==="prospeccion"&&<Prospeccion deals={deals} onSelect={setSel}/>}
+        {view==="dashboard"  &&<Dashboard deals={deals}/>}
+      </div>
+
+      {/* MODALES */}
+      {(showForm||editing)&&<DealForm deal={editing||null} onSave={saveDeal} onClose={()=>{setSF(false);setEditing(null);}} user={curUser}/>}
+      {sel&&!editing&&(
+        <DealDetail deal={sel} onClose={()=>setSel(null)}
+          onDelete={id=>{setDeals(p=>p.filter(d=>d.id!==id));setSel(null);deleteDeal(id);}}
+          onMove={moveDeal} onEdit={d=>{setEditing(d);setSel(null);}}
+          onAddComment={addComment} onStatusChange={changeStatus}
+          currentUser={curUser} allUsers={users}/>
+      )}
+      {showProf&&(
+        <ProfileModal user={curUser}
+          onSave={updated=>{const us=users.map(u=>u.id===updated.id?updated:u);saveUsers(us);setUser(updated);}}
+          onClose={()=>setProf(false)}/>
+      )}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+</body>
+</html>
